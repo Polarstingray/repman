@@ -127,15 +127,15 @@ int verify_minisig(const char *filepath, const char *minisig_path, const char *p
 }
 
 
-int main() {
-    repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json", "index.json");
-    repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.sha256", "index.json.sha256");
-    repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.minisig", "index.json.minisig");
-    repman.download("https://raw.githubusercontent.com/Polarstingray/repman-ci/refs/heads/main/ci.pub", "ci.pub");
-    repman.verify_sha256("index.json", "index.json.sha256");
-    repman.verify_minisig("index.json", "index.json.minisig", "ci.pub");
-    return 0;
-}
+// int main() {
+//     repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json", "index.json");
+//     repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.sha256", "index.json.sha256");
+//     repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.minisig", "index.json.minisig");
+//     repman.download("https://raw.githubusercontent.com/Polarstingray/repman-ci/refs/heads/main/ci.pub", "ci.pub");
+//     repman.verify_sha256("index.json", "index.json.sha256");
+//     repman.verify_minisig("index.json", "index.json.minisig", "ci.pub");
+//     return 0;
+// }
 
 
 // gcc src/verify.c src/util.c -lcurl -o ./build/verify.o
