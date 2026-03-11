@@ -75,6 +75,12 @@ int repman_file_exists(const char *path);
  */
 int repman_mkdir_p(const char *path);
 
+/*
+* repman_download  —  download a file from a URL to a destination path.
+* Returns 0 on success, -1 on error.
+*/
+int repman_download(const char *url, const char *dest_path);
+
 
 /* ── Error / logging helpers ─────────────────────────────────────────────── */
 

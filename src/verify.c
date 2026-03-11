@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
+#include <curl/curl.h>
+
 
 int parse_sha256(char *sha256_str, char *sha256) {
     // Extract the checksum from the output
@@ -127,15 +129,15 @@ int repman_verify_minisig(const char *filepath, const char *minisig_path, const 
 
 int main() {
 
-    download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json", "index.json");
-    download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.sha256", "index.json.sha256");
-    download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.minisig", "index.json.minisig");
-    download("https://raw.githubusercontent.com/Polarstingray/repman-ci/refs/heads/main/ci.pub", "ci.pub");
+    repman_download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json", "index.json");
+    repman_download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.sha256", "index.json.sha256");
+    repman_download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.minisig", "index.json.minisig");
+    repman_download("https://raw.githubusercontent.com/Polarstingray/repman-ci/refs/heads/main/ci.pub", "ci.pub");
     repman_verify_sha256("index.json", "index.json.sha256");
     repman_verify_minisig("index.json", "index.json.minisig", "ci.pub");
     return 0;
 }
 
 
-// gcc src/verify.c src/util.c src/index.c -lcurl -o ./build/verify.o
+// gcc src/verify.c src/util.c -lcurl -o ./build/verify.o
 // ./build/verify.o
