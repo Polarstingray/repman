@@ -19,10 +19,12 @@
 #include <unistd.h>   /* rename                  */
 #include <libgen.h>   /* dirname (POSIX)         */
 #include <curl/curl.h>
+#include <dirent.h>  /* DIR, opendir, readdir */
 
-/* Forward declarations for verification (implemented in verify.c) */
+/* Forward declarations for external helpers implemented elsewhere */
 int verify_sha256(const char *filepath, const char *sha256_path);
 int verify_minisig(const char *filepath, const char *minisig_path, const char *pubkey_path);
+int update_index(void);
 
 /* ── String helpers ──────────────────────────────────────────────────────── */
 
@@ -234,6 +236,51 @@ static int mkdir_p(const char *path) {
 }
 
 
+static int rm_rf(const char* path) {
+    struct stat st;
+    if (lstat(path, &st) != 0) {
+        /* Nothing to remove */
+        return 0;
+    }
+
+    if (S_ISDIR(st.st_mode)) {
+        DIR *d = opendir(path);
+        if (!d) {
+            REPMAN_LOG_ERR("rm_rf: cannot open dir '%s': %s", path, strerror(errno));
+            return -1;
+        }
+        struct dirent *entry;
+        while ((entry = readdir(d)) != NULL) {
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+            char *full_path = path_join(path, entry->d_name);
+            if (full_path == NULL) {
+                REPMAN_LOG_ERR("rm_rf: OOM building path for '%s/%s'", path, entry->d_name);
+                closedir(d);
+                return -1;
+            }
+            if (rm_rf(full_path) != 0) {
+                free(full_path);
+                closedir(d);
+                return -1;
+            }
+            free(full_path);
+        }
+        closedir(d);
+        if (rmdir(path) != 0) {
+            REPMAN_LOG_ERR("rm_rf: rmdir '%s' failed: %s", path, strerror(errno));
+            return -1;
+        }
+        return 0;
+    }
+
+    /* Regular file or symlink */
+    if (unlink(path) != 0) {
+        REPMAN_LOG_ERR("rm_rf: unlink '%s' failed: %s", path, strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
 static int download(const char *url, const char *dest_path) {
     CURL *curl_handle;
     CURLcode res;
@@ -277,6 +324,8 @@ const repman_ns_t repman = {
     .write_file     = write_file,
     .file_exists    = file_exists,
     .mkdir_p        = mkdir_p,
+    .rm             = rm_rf,
+    .update_index   = update_index,
     .download       = download,
     .verify_sha256  = verify_sha256,
     .verify_minisig = verify_minisig,

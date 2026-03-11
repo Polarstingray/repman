@@ -36,6 +36,7 @@ typedef struct repman_ns_s {
     int   (*write_file)(const char *path, const char *data, size_t len);
     int   (*file_exists)(const char *path);
     int   (*mkdir_p)(const char *path);
+    int   (*rm)(const char *path);   /* recursive remove: files or directories */
 
     /* Network helpers */
     int   (*download)(const char *url, const char *dest_path);
@@ -43,6 +44,8 @@ typedef struct repman_ns_s {
     /* Verification helpers */
     int   (*verify_sha256)(const char *filepath, const char *sha256_path);
     int   (*verify_minisig)(const char *filepath, const char *minisig_path, const char *pubkey_path);
+
+    int   (*update_index)();
 } repman_ns_t;
 
 /* Global namespace instance */

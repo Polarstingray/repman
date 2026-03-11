@@ -9,6 +9,8 @@
 
 */
 
+int update_index();
+
 
 
 #endif
