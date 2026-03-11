@@ -10,6 +10,22 @@
 #include <string.h>
 #include <stdlib.h>
 
+int parse_sha256(char *sha256_str, char *sha256) {
+    // Extract the checksum from the output
+    char *token = strtok(sha256_str, " ");
+    if (token == NULL) {
+        fprintf(stderr, "Failed to parse sha256sum output\n");
+        return -1;
+    }
+    strcpy(sha256, token);
+    // Remove any trailing newline from the actual checksum
+    sha256[strcspn(sha256, "\r\n")] = '\0';
+    if (strlen(sha256) != 64) {
+        fprintf(stderr, "Invalid actual checksum length: %s\n", sha256);
+        return -1;
+    }
+    return 0;
+}
 
 int repman_verify_sha256(const char *filepath, const char *sha256_path) {
     pid_t childpid;
@@ -51,18 +67,8 @@ int repman_verify_sha256(const char *filepath, const char *sha256_path) {
         return -1;
     }
     buffer[count] = '\0';  // Null-terminate the output
-
-    // Extract the checksum from the output
-    char *act_token = strtok(buffer, " ");
-    if (act_token == NULL) {
-        fprintf(stderr, "Failed to parse sha256sum output\n");
-        return -1;
-    }
-    char *actual_checksum = act_token;
-    // Remove any trailing newline from the actual checksum
-    actual_checksum[strcspn(actual_checksum, "\r\n")] = '\0';
-    if (strlen(actual_checksum) != 64) {
-        fprintf(stderr, "Invalid actual checksum length: %s\n", actual_checksum);
+    char actual_checksum[65]; 
+    if (parse_sha256(buffer, actual_checksum) != 0) {
         return -1;
     }
     
@@ -73,39 +79,28 @@ int repman_verify_sha256(const char *filepath, const char *sha256_path) {
         return -1;
     }
     
-    char *exp_token = strtok(checksum_file, " ");
-    if (exp_token == NULL) {
-        fprintf(stderr, "Failed to parse checksum file\n");
-        goto fail;
-    }
-    char *expected_checksum = exp_token;
-    if (expected_checksum == NULL) {
-        fprintf(stderr, "Failed to read expected checksum from file\n");
-        goto fail;
-    }
-    // Remove any trailing newline from the expected checksum
-    expected_checksum[strcspn(expected_checksum, "\r\n")] = '\0';
-    if (strlen(expected_checksum) != 64) {
-        fprintf(stderr, "Invalid expected checksum length: %s\n", expected_checksum);
-        goto fail;
+    char expected_checksum[65];
+    if (parse_sha256(checksum_file, expected_checksum) == 0) {
+        if (strcmp(actual_checksum, expected_checksum) != 0) {
+            fprintf(stderr, "Checksum mismatch: expected %s, got %s\n", expected_checksum, actual_checksum);
+        } else {
+            printf("Checksum verified successfully: %s\n", actual_checksum);
+            free(checksum_file);
+            return 0;
+        }
+    } else {
+        fprintf(stderr, "Failed to parse expected checksum from file: %s\n", sha256_path);
     }
 
-    if (strcmp(actual_checksum, expected_checksum) != 0) {
-        fprintf(stderr, "Checksum mismatch: expected %s, got %s\n", expected_checksum, actual_checksum);
-        goto fail;
-    }
-    printf("Checksum verified successfully: %s\n", actual_checksum);
+fail :
+    fprintf(stderr, "Failed to verify checksum for file: %s\n", filepath);
     free(checksum_file);
-    return 0;
-
-    fail :
-        free(checksum_file);
-        return -1;
+    return -1;
 }
 
 
 
-int repman_verify_minisig(const char *filepath, const char *minisig_path) {
+int repman_verify_minisig(const char *filepath, const char *minisig_path, const char *pubkey_path) {
     pid_t childpid;
     if ((childpid = fork()) == -1) {
         perror("Failed to fork");
@@ -113,7 +108,7 @@ int repman_verify_minisig(const char *filepath, const char *minisig_path) {
     }
     if (childpid == 0) {       /* child process */
         // minisign -Vm myfile.txt -p ./minisign.pub
-        execlp("minisign", "minisign", "-Vm", filepath, "-p", "ci.pub", NULL);
+        execlp("minisign", "minisign", "-Vm", filepath, "-p", pubkey_path, NULL);
         perror("Failed to execute minisign");
         exit(EXIT_FAILURE);
     }
@@ -137,7 +132,7 @@ int main() {
     download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.minisig", "index.json.minisig");
     download("https://raw.githubusercontent.com/Polarstingray/repman-ci/refs/heads/main/ci.pub", "ci.pub");
     repman_verify_sha256("index.json", "index.json.sha256");
-    repman_verify_minisig("index.json", "index.json.minisig");
+    repman_verify_minisig("index.json", "index.json.minisig", "ci.pub");
     return 0;
 }
 
