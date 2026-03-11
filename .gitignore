@@ -1,7 +1,8 @@
-index* 
+index.json*
 *.log
 *.env
 *.pyc
 *.pyo
 *.swp
 *.o
+build/
