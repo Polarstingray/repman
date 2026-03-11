@@ -34,46 +34,46 @@ static int tests_passed = 0;
 static void test_strdup(void) {
     printf("\n[test_strdup]\n");
 
-    char *s = repman_strdup("hello");
+    char *s = repman.str_dup("hello");
     CHECK(s != NULL);
     CHECK(strcmp(s, "hello") == 0);
     free(s);
 
-    char *empty = repman_strdup("");
+    char *empty = repman.str_dup("");
     CHECK(empty != NULL);
     CHECK(strlen(empty) == 0);
     free(empty);
 
-    CHECK(repman_strdup(NULL) == NULL);
+    CHECK(repman.str_dup(NULL) == NULL);
 }
 
 static void test_path_join(void) {
     printf("\n[test_path_join]\n");
 
-    char *p1 = repman_path_join("/var/lib/repman", "index.json");
+    char *p1 = repman.path_join("/var/lib/repman", "index.json");
     CHECK(p1 != NULL);
     CHECK(strcmp(p1, "/var/lib/repman/index.json") == 0);
     free(p1);
 
     /* base already has trailing slash */
-    char *p2 = repman_path_join("/var/lib/repman/", "index.json");
+    char *p2 = repman.path_join("/var/lib/repman/", "index.json");
     CHECK(p2 != NULL);
     CHECK(strcmp(p2, "/var/lib/repman/index.json") == 0);
     free(p2);
 
-    CHECK(repman_path_join(NULL, "x") == NULL);
-    CHECK(repman_path_join("x", NULL) == NULL);
+    CHECK(repman.path_join(NULL, "x") == NULL);
+    CHECK(repman.path_join("x", NULL) == NULL);
 }
 
 static void test_str_ends_with(void) {
     printf("\n[test_str_ends_with]\n");
 
-    CHECK(repman_str_ends_with("index.json", ".json") == 1);
-    CHECK(repman_str_ends_with("index.json", ".tar.gz") == 0);
-    CHECK(repman_str_ends_with("a", "a") == 1);
-    CHECK(repman_str_ends_with("a", "ab") == 0);
-    CHECK(repman_str_ends_with("", "") == 1);
-    CHECK(repman_str_ends_with(NULL, ".json") == 0);
+    CHECK(repman.str_ends_with("index.json", ".json") == 1);
+    CHECK(repman.str_ends_with("index.json", ".tar.gz") == 0);
+    CHECK(repman.str_ends_with("a", "a") == 1);
+    CHECK(repman.str_ends_with("a", "ab") == 0);
+    CHECK(repman.str_ends_with("", "") == 1);
+    CHECK(repman.str_ends_with(NULL, ".json") == 0);
 }
 
 static void test_file_rw(void) {
@@ -83,28 +83,28 @@ static void test_file_rw(void) {
     const char *data = "hello repman\n";
     size_t      dlen = strlen(data);
 
-    int rc = repman_write_file(path, data, dlen);
+    int rc = repman.write_file(path, data, dlen);
     CHECK(rc == 0);
-    CHECK(repman_file_exists(path) == 1);
+    CHECK(repman.file_exists(path) == 1);
 
     size_t out_len = 0;
-    char  *buf = repman_read_file(path, &out_len);
+    char  *buf = repman.read_file(path, &out_len);
     CHECK(buf != NULL);
     CHECK(out_len == dlen);
     CHECK(strcmp(buf, data) == 0);
     free(buf);
 
-    CHECK(repman_file_exists("/tmp/repman_no_such_file_xyz") == 0);
+    CHECK(repman.file_exists("/tmp/repman_no_such_file_xyz") == 0);
 }
 
 static void test_mkdir_p(void) {
     printf("\n[test_mkdir_p]\n");
 
-    int rc = repman_mkdir_p("/tmp/repman_test_dir/a/b/c");
+    int rc = repman.mkdir_p("/tmp/repman_test_dir/a/b/c");
     CHECK(rc == 0);
 
     /* calling again should be idempotent (EEXIST is not an error) */
-    rc = repman_mkdir_p("/tmp/repman_test_dir/a/b/c");
+    rc = repman.mkdir_p("/tmp/repman_test_dir/a/b/c");
     CHECK(rc == 0);
 }
 

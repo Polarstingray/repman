@@ -18,18 +18,15 @@
 #include <errno.h>    /* errno, EEXIST           */
 #include <unistd.h>   /* rename                  */
 #include <libgen.h>   /* dirname (POSIX)         */
-
-#include "lib/util.h"
-#include "lib/index.h"
-#include <stdio.h>
 #include <curl/curl.h>
-#include "lib/verify.h"
-#include <string.h>
 
+/* Forward declarations for verification (implemented in verify.c) */
+int verify_sha256(const char *filepath, const char *sha256_path);
+int verify_minisig(const char *filepath, const char *minisig_path, const char *pubkey_path);
 
 /* ── String helpers ──────────────────────────────────────────────────────── */
 
-char *repman_strdup(const char *src) {
+static char *str_dup(const char *src) {
     if (src == NULL) return NULL;
 
     /*
@@ -48,7 +45,7 @@ char *repman_strdup(const char *src) {
 }
 
 
-char *repman_path_join(const char *base, const char *name) {
+static char *path_join(const char *base, const char *name) {
     if (base == NULL || name == NULL) return NULL;
 
     size_t base_len = strlen(base);
@@ -80,7 +77,7 @@ char *repman_path_join(const char *base, const char *name) {
 
 
 
-int repman_str_ends_with(const char *str, const char *suffix) {
+static int str_ends_with(const char *str, const char *suffix) {
     if (str == NULL || suffix == NULL) return 0;
 
     size_t str_len    = strlen(str);
@@ -95,7 +92,7 @@ int repman_str_ends_with(const char *str, const char *suffix) {
 
 /* ── File helpers ────────────────────────────────────────────────────────── */
 
-char *repman_read_file(const char *path, size_t *out_len) {
+static char *read_file(const char *path, size_t *out_len) {
     if (path == NULL) return NULL;
 
     FILE *fp = fopen(path, "rb");   /* "rb" = read binary — consistent on all OS */
@@ -141,7 +138,7 @@ fail:
 }
 
 
-int repman_write_file(const char *path, const char *data, size_t len) {
+static int write_file(const char *path, const char *data, size_t len) {
     if (path == NULL || data == NULL) return -1;
 
     /*
@@ -187,7 +184,7 @@ int repman_write_file(const char *path, const char *data, size_t len) {
 }
 
 
-int repman_file_exists(const char *path) {
+static int file_exists(const char *path) {
     if (path == NULL) return 0;
 
     struct stat st;
@@ -199,7 +196,7 @@ int repman_file_exists(const char *path) {
 }
 
 
-int repman_mkdir_p(const char *path) {
+static int mkdir_p(const char *path) {
     if (path == NULL) return -1;
 
     /*
@@ -237,7 +234,7 @@ int repman_mkdir_p(const char *path) {
 }
 
 
-int repman_download(const char *url, const char *dest_path) {
+static int download(const char *url, const char *dest_path) {
     CURL *curl_handle;
     CURLcode res;
     FILE *file;
@@ -270,3 +267,17 @@ int repman_download(const char *url, const char *dest_path) {
     curl_global_cleanup();
     return 0;
 }
+
+/* ── Namespace instance ── */
+const repman_ns_t repman = {
+    .str_dup        = str_dup,
+    .path_join      = path_join,
+    .str_ends_with  = str_ends_with,
+    .read_file      = read_file,
+    .write_file     = write_file,
+    .file_exists    = file_exists,
+    .mkdir_p        = mkdir_p,
+    .download       = download,
+    .verify_sha256  = verify_sha256,
+    .verify_minisig = verify_minisig,
+};

@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <curl/curl.h>
 
-
+/* Generic helper remains file-local */
 int parse_sha256(char *sha256_str, char *sha256) {
     // Extract the checksum from the output
     char *token = strtok(sha256_str, " ");
@@ -29,7 +29,7 @@ int parse_sha256(char *sha256_str, char *sha256) {
     return 0;
 }
 
-int repman_verify_sha256(const char *filepath, const char *sha256_path) {
+int verify_sha256(const char *filepath, const char *sha256_path) {
     pid_t childpid;
     int fd[2];
 
@@ -75,7 +75,7 @@ int repman_verify_sha256(const char *filepath, const char *sha256_path) {
     }
     
     // Extract the expected checksum from the checksum file
-    char *checksum_file = repman_read_file(sha256_path, NULL);
+    char *checksum_file = repman.read_file(sha256_path, NULL);
     if (checksum_file == NULL) {
         fprintf(stderr, "Failed to read checksum file: %s\n", sha256_path);
         return -1;
@@ -102,7 +102,7 @@ fail :
 
 
 
-int repman_verify_minisig(const char *filepath, const char *minisig_path, const char *pubkey_path) {
+int verify_minisig(const char *filepath, const char *minisig_path, const char *pubkey_path) {
     pid_t childpid;
     if ((childpid = fork()) == -1) {
         perror("Failed to fork");
@@ -128,13 +128,12 @@ int repman_verify_minisig(const char *filepath, const char *minisig_path, const 
 
 
 int main() {
-
-    repman_download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json", "index.json");
-    repman_download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.sha256", "index.json.sha256");
-    repman_download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.minisig", "index.json.minisig");
-    repman_download("https://raw.githubusercontent.com/Polarstingray/repman-ci/refs/heads/main/ci.pub", "ci.pub");
-    repman_verify_sha256("index.json", "index.json.sha256");
-    repman_verify_minisig("index.json", "index.json.minisig", "ci.pub");
+    repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json", "index.json");
+    repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.sha256", "index.json.sha256");
+    repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.minisig", "index.json.minisig");
+    repman.download("https://raw.githubusercontent.com/Polarstingray/repman-ci/refs/heads/main/ci.pub", "ci.pub");
+    repman.verify_sha256("index.json", "index.json.sha256");
+    repman.verify_minisig("index.json", "index.json.minisig", "ci.pub");
     return 0;
 }
 
