@@ -1,0 +1,7 @@
+index* 
+*.log
+*.env
+*.pyc
+*.pyo
+*.swp
+*.o
