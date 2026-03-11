@@ -15,11 +15,21 @@
 int repman_verify_sha256(const char *filepath, const char *sha256_path);
 
 /*
+    Parse a SHA256 hash from a string.
+    The input string is expected to be in the format produced by `sha256sum`, which is:
+        <64-character SHA256 hash> <whitespace> <filename>
+    returns 0 on success and fills the sha256 output buffer with the extracted hash.
+    returns -1 on failure (e.g., if the input format is invalid or the hash
+*/
+int parse_sha256(char *sha256_str, char *sha256);
+
+
+/*
     Verify the signature of a file using minisign.
     The minisig_path should point to the .minisig signature file corresponding to the file being verified.
     Returns 0 on success, -1 on failure.
 */
-int repman_verify_minisig(const char *filepath, const char *minisig_path);
+int repman_verify_minisig(const char *filepath, const char *minisig_path, const char *pubkey_path);
 
 
 #endif
