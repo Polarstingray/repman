@@ -5,14 +5,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #define PACKAGE_URL "https://github.com/Polarstingray/packages/releases/tag/test-v1.2.10"
 #define OS "ubuntu"
 #define ARCH "amd64"
 #define PUBKEY "ci.pub"
 
-// gcc src/verify.c src/util.c src/install.c src/index.c -lcurl -o ./build/install.o && ./build/install.o 
-// && tree ~/.local/share/repman
+// gcc src/verify.c src/util.c src/install.c src/index.c -lcurl -o ./build/install.o && ./build/install.o && tree ~/.local/share/repman
 
 char *repman_resolve_download(const char *url, const char *pkg_and_ver, const char *os, const char *arch, const char *ext) {
     // convert url in index to download url
@@ -57,19 +59,68 @@ char* repman_pkg_name(const char *pkg_and_ver, const char *os, const char *arch,
     return pkg_name;
 }
 
-int repman_download_pkg(const char* download_dir, const char *url, const char *pkg_and_ver, const char *os, const char *arch) {
+int repman_extract_tarball(const char *tarball_path, const char *dest_dir) {
+    pid_t childpid;
+    if ((childpid = fork()) == -1) {
+        perror("Failed to fork");
+        return -1;
+    }
+    if (childpid == 0) {       /* child process */
+        // tar -xzf <tarball> -C ~/.local/share/repman/packages/<pkg_name>_<version>
+        printf("tar -xzf %s -C %s\n", tarball_path, dest_dir);
+        execlp("tar", "tar", "-xzf", tarball_path, "-C", dest_dir, NULL);
+        perror("Failed to execute tar");
+        exit(EXIT_FAILURE);
+    }
+    /* parent process */
+    int status;
+    waitpid(childpid, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        fprintf(stderr, "tar extract tarball failed with status %d\n", WEXITSTATUS(status));
+        return -1;
+    }
+
+    fprintf(stdout, "Tarball extracted successfully.\n");
+    return 0;
+}
+
+int repman_download_pkg(const char *url, const char *pkg_and_ver, const char *os, const char *arch) {
     int rc = 0;
     char* pkg_url = repman_resolve_download(url, pkg_and_ver, os, arch, ".tar.gz");
     char* sig_url = repman_resolve_download(url, pkg_and_ver, os, arch, ".tar.gz.minisig");
     char* sha256_url = repman_resolve_download(url, pkg_and_ver, os, arch, ".tar.gz.sha256");
 
-    char* pkg_path = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz");
-    char* sig_path = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz.minisig");
-    char* sha256_path = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz.sha256");
+    // construct full paths
+    char* base_path = repman_get_data_dir();
+    char* download_dir = repman_path_join(base_path, "tmp");
+
+    char* pkg_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz");
+    char* sig_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz.minisig");
+    char* sha256_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz.sha256");
+    char* pkg_path = repman_path_join(download_dir, pkg_name);
+    char* sig_path = repman_path_join(download_dir, sig_name);
+    char* sha256_path = repman_path_join(download_dir, sha256_name);
+    free(pkg_name); free(sig_name); free(sha256_name);
+
+    char* pkg_dir = repman_path_join(base_path, "packages");
+    char* pkg_ver = repman_str_repl(repman_str_dup(pkg_and_ver), "-v", "_v");
+    char* new_installed_path = repman_path_join(pkg_dir, pkg_ver);
+
+    char *app_name = strtok(pkg_ver, "_v");
+    printf("app_name: %s\n", app_name);
+    char* old_installed_path = repman_path_join(pkg_dir, app_name);
+    free(app_name);
+
+    repman_rm(download_dir);
+    if (repman_mkdir_p(download_dir) != 0) {
+        fprintf(stderr, "Failed to create tmp directory: %s\n", download_dir);
+        rc = -1;
+        goto cleanup;
+    }
 
     if (!pkg_url || !sig_url || !sha256_url) {
         fprintf(stderr, "Failed to resolve download URLs\n");
-        rc = 1;
+        rc = -1;
         goto cleanup;
     }
 
@@ -91,14 +142,71 @@ int repman_download_pkg(const char* download_dir, const char *url, const char *p
     repman_verify_minisig(pkg_path, sig_path, PUBKEY);
     repman_verify_sha256(pkg_path, sha256_path);
     printf("Verification Complete.\n");
+
+    // extract tarball to ~/.local/share/repman/packages/<pkg_name>_<version>
+    // char* pkg_dir = repman_path_join(base_path, "packages");
+    if (repman_extract_tarball(pkg_path, pkg_dir) != 0) {
+        fprintf(stderr, "Failed to extract tarball\n");
+        rc = -1;
+        goto cleanup;
+    }
+
+    // rename <pkg_name> -> <pkg_name>_<version>
+    // char* tmp = repman_str_dup(pkg_name);
+    // char* pkg_ver = repman_str_repl(repman_str_dup(pkg_and_ver), "-v", "_v");
+    // char* new_installed_path = repman_path_join(pkg_dir, pkg_ver);
+
+    // char *app_name = strtok(pkg_ver, "_v");
+    // printf("app_name: %s\n", app_name);
+    // char* old_installed_path = repman_path_join(pkg_dir, app_name);
+    // free(app_name);
+
+    // check if new_installed_path is a dir already
+    if (!repman_dir_exists(new_installed_path)) {
+        if (rename(pkg_path, new_installed_path) != 0) {
+            fprintf(stderr, "Failed to rename package\n");
+            rc = -1;
+            goto cleanup;
+        }
+    } else {
+        fprintf(stderr, "Package already exists: %s\n", new_installed_path);
+        rc = -1;
+        goto cleanup;
+    }
+
+    printf("renaming %s -> %s\n", old_installed_path, new_installed_path);
+    if (rename(old_installed_path, new_installed_path) != 0) {
+        fprintf(stderr, "Failed to rename package\n");
+        rc = -1;
+        repman_rm(old_installed_path);
+        goto cleanup;
+    }
+
+    printf("Package installed successfully.\n");
+
+    // sanity verification of extracted content (bin dir w/ bin, etc.)
+
+
+    // atomic symlink rewrite
+    // create symlink ~/.local/share/repman/packages/test-v1.2.10_ubuntu_amd64 -> ~/.local/share/repman/packages/test-v1.2.10_ubuntu_amd64.tar.gz
+
+
+    // remove old version directory
     
+
+
 cleanup:
+    repman_rm(download_dir);
+    free(download_dir);
+    free(base_path);
     free(pkg_url);
     free(sig_url);
     free(sha256_url);
     free(pkg_path);
     free(sig_path);
     free(sha256_path);
+    free(old_installed_path);
+    free(new_installed_path);
     return rc;
 
 }
@@ -116,10 +224,12 @@ int main() {
     // printf("Download complete.\n");
     // free(url); free(pkg_name);
 
+    repman_ensure_dirs();
+
     char* pkg_and_ver = "test-v1.2.10";
     char* os = "ubuntu";
     char* arch = "amd64";
-    repman_download_pkg("", PACKAGE_URL, pkg_and_ver, os, arch);
+    repman_download_pkg(PACKAGE_URL, pkg_and_ver, os, arch);
 
     return 0;
 }

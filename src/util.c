@@ -107,8 +107,6 @@ char *repman_path_join(const char *base, const char *name) {
 }
 
 
-
-
 int repman_str_ends_with(const char *str, const char *suffix) {
     if (str == NULL || suffix == NULL) return 0;
 
@@ -227,6 +225,13 @@ int repman_file_exists(const char *path) {
     return (stat(path, &st) == 0 && S_ISREG(st.st_mode)) ? 1 : 0;
 }
 
+int repman_dir_exists(const char *path) {
+    if (path == NULL) return 0;
+
+    struct stat st;
+    return (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) ? 1 : 0;
+}
+
 
 int repman_mkdir_p(const char *path) {
     if (path == NULL) return -1;
@@ -343,7 +348,7 @@ int repman_download(const char *url, const char *dest_path) {
     if (res != CURLE_OK) {
         fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
     } else {
-        printf("Index downloaded successfully: %s\n", outfilename);
+        printf("downloaded successfully: %s\n", outfilename);
     }
 
     curl_easy_cleanup(curl_handle);
@@ -373,11 +378,12 @@ void repman_ensure_dirs(void) {
     char *sig   = repman_path_join(base, "sig/index");
     char *tmp   = repman_path_join(base, "tmp");
     char *cache = repman_path_join(base, "cache");
+    char *packages = repman_path_join(base, "packages");
 
     repman_mkdir_p(index);
     repman_mkdir_p(sig);
     repman_mkdir_p(tmp);
     repman_mkdir_p(cache);
-
-    free(base); free(index); free(sig); free(tmp); free(cache);
+    repman_mkdir_p(packages);
+    free(base); free(index); free(sig); free(tmp); free(cache); free(packages);
 }

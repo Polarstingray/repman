@@ -31,6 +31,7 @@ int   repman_str_ends_with(const char *str, const char *suffix);
 char *repman_read_file(const char *path, size_t *out_len);
 int   repman_write_file(const char *path, const char *data, size_t len);
 int   repman_file_exists(const char *path);
+int   repman_dir_exists(const char *path);
 int   repman_mkdir_p(const char *path);
 int   repman_rm(const char *path);   /* recursive remove: files or directories */
 char *repman_get_data_dir(void);
