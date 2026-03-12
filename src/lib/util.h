@@ -24,6 +24,7 @@
 /* String helpers */
 char *repman_str_dup(const char *src);
 char *repman_path_join(const char *base, const char *name);
+char *repman_str_repl(char *s, const char *s1, const char *s2);
 int   repman_str_ends_with(const char *str, const char *suffix);
 
 /* File helpers */

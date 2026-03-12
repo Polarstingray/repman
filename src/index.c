@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
+#include <cjson/cJSON.h>
 
 #define INDEX_URL "https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json"
 #define INDEX_SHA256_URL "https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.sha256"
@@ -23,6 +24,10 @@ char* repman_full_path(const char *dir_, const char *name) {
     char* path = repman_path_join(dir, name);
     free(base); free(dir);
     return path;
+}
+
+char* repman_get_pkg_url(const char *name) {
+
 }
 
 // download, verify, and atomic rewrite
