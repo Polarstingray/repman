@@ -33,19 +33,24 @@ int repman_update_index(void) {
     char *index_minisig_url = INDEX_MINISIG_URL;
 
     // construct paths
+    char* data_dir = repman_get_data_dir();
+    char* sig_dir = repman_path_join(data_dir, SIG_DIR);
+
+    // char* ipath = repman_path_join(data_dir, INDEX_DIR);
+
     char* ipath = repman_full_path(INDEX_DIR, INDEX_NAME);
-    
-    char* sig_dir = repman_path_join(repman_get_data_dir(), SIG_DIR);
     
     char sig_name[32] = INDEX_NAME;
     strcat(sig_name, ".minisig");
-    char* sig_path = repman_full_path(sig_dir, sig_name);
+    // char* sig_path = repman_full_path(SIG_DIR, sig_name);
+    char* sig_path = repman_path_join(sig_dir, sig_name);
 
     char sha256_name[32] = INDEX_NAME;
     strcat(sha256_name, ".sha256");
-    char* sha256_path = repman_full_path(sig_dir, sha256_name);
+    // char* sha256_path = repman_full_path(sig_dir, sha256_name);
+    char* sha256_path = repman_path_join(sig_dir, sha256_name);
 
-    char *download_dir = repman_path_join(repman_get_data_dir(), DOWNLOAD_DIR);
+    char *download_dir = repman_path_join(data_dir, DOWNLOAD_DIR);
     char index_tmp_name[32] = INDEX_NAME;
     char sha256_tmp_name[32] = INDEX_NAME;
     strcat(index_tmp_name, ".tmp");
@@ -56,7 +61,7 @@ int repman_update_index(void) {
     char *index_tmp_path = repman_path_join(download_dir, index_tmp_name);
     char *index_sha256_tmp_path = repman_path_join(download_dir, sha256_tmp_name);
     char *index_minisig_tmp_path = repman_path_join(download_dir, sig_tmp_name);
-    free(sig_tmp_name);
+    free(sig_tmp_name); 
 
     int rc = 0;
     // rm -rf download_dir
@@ -95,9 +100,21 @@ int repman_update_index(void) {
     printf("Verifying checksums and minisign signature for index.json successful\n");
 
     // atomic rewrite
-    rename(index_tmp_path, ipath);
-    rename(index_sha256_tmp_path, sha256_path);
-    rename(index_minisig_tmp_path, sig_path);
+    if (rename(index_tmp_path, ipath) != 0) {
+        fprintf(stderr, "Failed to atomic rewrite index\n");
+        rc = -1;
+        goto cleanup;
+    }
+    if (rename(index_sha256_tmp_path, sha256_path) != 0) {
+        fprintf(stderr, "Failed to atomic rewrite sha256 for index\n");
+        rc = -1;
+        goto cleanup;
+    }
+    if (rename(index_minisig_tmp_path, sig_path) != 0) {
+        fprintf(stderr, "Failed to atomic rewrite signature for index\n");
+        rc = -1;
+        goto cleanup;
+    }
     printf("Atomic rewrite successful\n");
 
 cleanup:
@@ -106,9 +123,11 @@ cleanup:
     free(ipath);
     free(sha256_path);
     free(sig_path);
+    free(sig_dir);
     free(index_tmp_path);
     free(index_sha256_tmp_path);
     free(index_minisig_tmp_path);
+    free(data_dir);
     return rc;
 }
 
