@@ -20,6 +20,7 @@
 #include <libgen.h>   /* dirname (POSIX)         */
 #include <curl/curl.h>
 #include <dirent.h>  /* DIR, opendir, readdir */
+#include <pwd.h>
 
 
 /* ── String helpers ──────────────────────────────────────────────────────── */
@@ -311,5 +312,17 @@ int repman_download(const char *url, const char *dest_path) {
     return 0;
 }
 
-/* ── Namespace instance ── */
-/* Remove namespace instance: we now expose global repman_* functions */
+char *repman_get_data_dir(void) {
+    const char *xdg = getenv("XDG_DATA_HOME");
+    char *base;
+    if (xdg != NULL && xdg[0] != '\0') {
+        base = repman_path_join(xdg, "repman");
+    } else {
+        const char *home = getenv("HOME");
+        if (home == NULL) {
+            home = getpwuid(getuid())->pw_dir; 
+        }
+        base = repman_path_join(home, ".local/share/repman");
+    }
+    return base;
+}

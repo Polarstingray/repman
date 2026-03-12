@@ -32,6 +32,8 @@ int   repman_write_file(const char *path, const char *data, size_t len);
 int   repman_file_exists(const char *path);
 int   repman_mkdir_p(const char *path);
 int   repman_rm(const char *path);   /* recursive remove: files or directories */
+char *repman_get_data_dir(void);
+
 
 /* Network helpers */
 int   repman_download(const char *url, const char *dest_path);
