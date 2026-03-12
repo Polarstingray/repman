@@ -135,8 +135,8 @@ cleanup:
 
 // gcc src/verify.c src/util.c src/index.c -lcurl -o ./build/index.o && ./build/index.o && tree ~/.local/share/repman
 
-int main() {
-    repman_ensure_dirs();
-    repman_update_index();
-    return 0;
-}
+// int main() {
+//     repman_ensure_dirs();
+//     repman_update_index();
+//     return 0;
+// }

@@ -298,6 +298,7 @@ int repman_download(const char *url, const char *dest_path) {
         curl_easy_setopt(curl_handle, CURLOPT_URL, url);
         curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, NULL); // Use default write function
         curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, file); // Write data to
+        curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L); // Follow redirects
         res = curl_easy_perform(curl_handle);
 
         if (res != CURLE_OK) {
