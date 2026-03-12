@@ -21,14 +21,10 @@
 #include <curl/curl.h>
 #include <dirent.h>  /* DIR, opendir, readdir */
 
-/* Forward declarations for external helpers implemented elsewhere */
-int verify_sha256(const char *filepath, const char *sha256_path);
-int verify_minisig(const char *filepath, const char *minisig_path, const char *pubkey_path);
-int update_index(void);
 
 /* ── String helpers ──────────────────────────────────────────────────────── */
 
-static char *str_dup(const char *src) {
+char *repman_str_dup(const char *src) {
     if (src == NULL) return NULL;
 
     /*
@@ -47,7 +43,7 @@ static char *str_dup(const char *src) {
 }
 
 
-static char *path_join(const char *base, const char *name) {
+char *repman_path_join(const char *base, const char *name) {
     if (base == NULL || name == NULL) return NULL;
 
     size_t base_len = strlen(base);
@@ -79,7 +75,7 @@ static char *path_join(const char *base, const char *name) {
 
 
 
-static int str_ends_with(const char *str, const char *suffix) {
+int repman_str_ends_with(const char *str, const char *suffix) {
     if (str == NULL || suffix == NULL) return 0;
 
     size_t str_len    = strlen(str);
@@ -94,7 +90,7 @@ static int str_ends_with(const char *str, const char *suffix) {
 
 /* ── File helpers ────────────────────────────────────────────────────────── */
 
-static char *read_file(const char *path, size_t *out_len) {
+char *repman_read_file(const char *path, size_t *out_len) {
     if (path == NULL) return NULL;
 
     FILE *fp = fopen(path, "rb");   /* "rb" = read binary — consistent on all OS */
@@ -140,7 +136,7 @@ fail:
 }
 
 
-static int write_file(const char *path, const char *data, size_t len) {
+int repman_write_file(const char *path, const char *data, size_t len) {
     if (path == NULL || data == NULL) return -1;
 
     /*
@@ -186,7 +182,7 @@ static int write_file(const char *path, const char *data, size_t len) {
 }
 
 
-static int file_exists(const char *path) {
+int repman_file_exists(const char *path) {
     if (path == NULL) return 0;
 
     struct stat st;
@@ -198,7 +194,7 @@ static int file_exists(const char *path) {
 }
 
 
-static int mkdir_p(const char *path) {
+int repman_mkdir_p(const char *path) {
     if (path == NULL) return -1;
 
     /*
@@ -236,7 +232,7 @@ static int mkdir_p(const char *path) {
 }
 
 
-static int rm_rf(const char* path) {
+int repman_rm(const char* path) {
     struct stat st;
     if (lstat(path, &st) != 0) {
         /* Nothing to remove */
@@ -252,13 +248,13 @@ static int rm_rf(const char* path) {
         struct dirent *entry;
         while ((entry = readdir(d)) != NULL) {
             if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
-            char *full_path = path_join(path, entry->d_name);
+            char *full_path = repman_path_join(path, entry->d_name);
             if (full_path == NULL) {
                 REPMAN_LOG_ERR("rm_rf: OOM building path for '%s/%s'", path, entry->d_name);
                 closedir(d);
                 return -1;
             }
-            if (rm_rf(full_path) != 0) {
+            if (repman_rm(full_path) != 0) {
                 free(full_path);
                 closedir(d);
                 return -1;
@@ -281,7 +277,7 @@ static int rm_rf(const char* path) {
     return 0;
 }
 
-static int download(const char *url, const char *dest_path) {
+int repman_download(const char *url, const char *dest_path) {
     CURL *curl_handle;
     CURLcode res;
     FILE *file;
@@ -316,17 +312,4 @@ static int download(const char *url, const char *dest_path) {
 }
 
 /* ── Namespace instance ── */
-const repman_ns_t repman = {
-    .str_dup        = str_dup,
-    .path_join      = path_join,
-    .str_ends_with  = str_ends_with,
-    .read_file      = read_file,
-    .write_file     = write_file,
-    .file_exists    = file_exists,
-    .mkdir_p        = mkdir_p,
-    .rm             = rm_rf,
-    .update_index   = update_index,
-    .download       = download,
-    .verify_sha256  = verify_sha256,
-    .verify_minisig = verify_minisig,
-};
+/* Remove namespace instance: we now expose global repman_* functions */

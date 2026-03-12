@@ -9,7 +9,7 @@
 
 */
 
-int update_index();
+int repman_update_index();
 
 
 

@@ -29,7 +29,7 @@ int parse_sha256(char *sha256_str, char *sha256) {
     return 0;
 }
 
-int verify_sha256(const char *filepath, const char *sha256_path) {
+int repman_verify_sha256(const char *filepath, const char *sha256_path) {
     pid_t childpid;
     int fd[2];
 
@@ -75,7 +75,7 @@ int verify_sha256(const char *filepath, const char *sha256_path) {
     }
     
     // Extract the expected checksum from the checksum file
-    char *checksum_file = repman.read_file(sha256_path, NULL);
+    char *checksum_file = repman_read_file(sha256_path, NULL);
     if (checksum_file == NULL) {
         fprintf(stderr, "Failed to read checksum file: %s\n", sha256_path);
         return -1;
@@ -102,7 +102,7 @@ fail :
 
 
 
-int verify_minisig(const char *filepath, const char *minisig_path, const char *pubkey_path) {
+int repman_verify_minisig(const char *filepath, const char *minisig_path, const char *pubkey_path) {
     pid_t childpid;
     if ((childpid = fork()) == -1) {
         perror("Failed to fork");
