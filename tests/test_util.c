@@ -223,6 +223,14 @@ static void test_update_index(void) {
     CHECK(repman_file_exists("sig/index/index.json.minisig") == 1);
 }
 
+static void test_get_data_dir(void) {
+    printf("\n[test_get_data_dir]\n");
+    const char *data_dir = repman_get_data_dir();
+    CHECK(data_dir != NULL);
+    printf("Data directory: %s\n", data_dir);
+    free(data_dir);
+}
+
 
 /* ── Entry point ─────────────────────────────────────────────────────────── */
 
@@ -239,6 +247,7 @@ int main(void) {
     test_verify_sha256();
     test_verify_minisig();
     test_update_index();
+    test_get_data_dir();
 
     printf("\n%d / %d tests passed\n", tests_passed, tests_run);
     return (tests_passed == tests_run) ? 0 : 1;

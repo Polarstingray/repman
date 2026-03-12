@@ -326,3 +326,18 @@ char *repman_get_data_dir(void) {
     }
     return base;
 }
+
+void repman_ensure_dirs(void) {
+    char *base  = repman_get_data_dir();
+    char *index = repman_path_join(base, "index");
+    char *sig   = repman_path_join(base, "sig/index");
+    char *tmp   = repman_path_join(base, "tmp");
+    char *cache = repman_path_join(base, "cache");
+
+    repman_mkdir_p(index);
+    repman_mkdir_p(sig);
+    repman_mkdir_p(tmp);
+    repman_mkdir_p(cache);
+
+    free(base); free(index); free(sig); free(tmp); free(cache);
+}

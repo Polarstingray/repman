@@ -33,6 +33,7 @@ int   repman_file_exists(const char *path);
 int   repman_mkdir_p(const char *path);
 int   repman_rm(const char *path);   /* recursive remove: files or directories */
 char *repman_get_data_dir(void);
+void repman_ensure_dirs(void);
 
 
 /* Network helpers */
