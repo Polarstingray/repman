@@ -6,3 +6,5 @@ index.json*
 *.swp
 *.o
 build/
+tmp/
+sig/

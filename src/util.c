@@ -18,11 +18,14 @@
 #include <errno.h>    /* errno, EEXIST           */
 #include <unistd.h>   /* rename                  */
 #include <libgen.h>   /* dirname (POSIX)         */
+#include <curl/curl.h>
+#include <dirent.h>  /* DIR, opendir, readdir */
+#include <pwd.h>
 
 
 /* ── String helpers ──────────────────────────────────────────────────────── */
 
-char *repman_strdup(const char *src) {
+char *repman_str_dup(const char *src) {
     if (src == NULL) return NULL;
 
     /*
@@ -227,4 +230,114 @@ int repman_mkdir_p(const char *path) {
     }
 
     return 0;
+}
+
+
+int repman_rm(const char* path) {
+    struct stat st;
+    if (lstat(path, &st) != 0) {
+        /* Nothing to remove */
+        return 0;
+    }
+
+    if (S_ISDIR(st.st_mode)) {
+        DIR *d = opendir(path);
+        if (!d) {
+            REPMAN_LOG_ERR("rm_rf: cannot open dir '%s': %s", path, strerror(errno));
+            return -1;
+        }
+        struct dirent *entry;
+        while ((entry = readdir(d)) != NULL) {
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+            char *full_path = repman_path_join(path, entry->d_name);
+            if (full_path == NULL) {
+                REPMAN_LOG_ERR("rm_rf: OOM building path for '%s/%s'", path, entry->d_name);
+                closedir(d);
+                return -1;
+            }
+            if (repman_rm(full_path) != 0) {
+                free(full_path);
+                closedir(d);
+                return -1;
+            }
+            free(full_path);
+        }
+        closedir(d);
+        if (rmdir(path) != 0) {
+            REPMAN_LOG_ERR("rm_rf: rmdir '%s' failed: %s", path, strerror(errno));
+            return -1;
+        }
+        return 0;
+    }
+
+    /* Regular file or symlink */
+    if (unlink(path) != 0) {
+        REPMAN_LOG_ERR("rm_rf: unlink '%s' failed: %s", path, strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+int repman_download(const char *url, const char *dest_path) {
+    CURL *curl_handle;
+    CURLcode res;
+    FILE *file;
+    const char *outfilename = dest_path;
+
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl_handle = curl_easy_init();
+
+    if (curl_handle) {
+        file = fopen(outfilename, "wb");
+        if (!file) {
+            fprintf(stderr, "Could not open file for writing: %s\n", outfilename);
+            return -1;
+        }
+
+
+        curl_easy_setopt(curl_handle, CURLOPT_URL, url);
+        curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, NULL); // Use default write function
+        curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, file); // Write data to
+        res = curl_easy_perform(curl_handle);
+
+        if (res != CURLE_OK) {
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        } else {
+            printf("Index downloaded successfully: %s\n", outfilename);
+        }
+    }
+    curl_easy_cleanup(curl_handle);
+    fclose(file);
+    curl_global_cleanup();
+    return 0;
+}
+
+char *repman_get_data_dir(void) {
+    const char *xdg = getenv("XDG_DATA_HOME");
+    char *base;
+    if (xdg != NULL && xdg[0] != '\0') {
+        base = repman_path_join(xdg, "repman");
+    } else {
+        const char *home = getenv("HOME");
+        if (home == NULL) {
+            home = getpwuid(getuid())->pw_dir; 
+        }
+        base = repman_path_join(home, ".local/share/repman");
+    }
+    return base;
+}
+
+void repman_ensure_dirs(void) {
+    char *base  = repman_get_data_dir();
+    char *index = repman_path_join(base, "index");
+    char *sig   = repman_path_join(base, "sig/index");
+    char *tmp   = repman_path_join(base, "tmp");
+    char *cache = repman_path_join(base, "cache");
+
+    repman_mkdir_p(index);
+    repman_mkdir_p(sig);
+    repman_mkdir_p(tmp);
+    repman_mkdir_p(cache);
+
+    free(base); free(index); free(sig); free(tmp); free(cache);
 }
