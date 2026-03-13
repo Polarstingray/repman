@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
 
@@ -16,7 +17,7 @@
 #define PUBKEY "ci.pub"
 
 // gcc src/verify.c src/util.c src/install.c src/index.c -lcurl -o ./build/install.o && ./build/install.o && tree ~/.local/share/repman
-
+// rm -rf ~/.local/share/repman/packages/*
 int check_for_executables(const char *path) {
     DIR *dr;
     struct dirent *de;
@@ -84,14 +85,14 @@ char* repman_pkg_name(const char *pkg_and_ver, const char *os, const char *arch,
 int repman_extract_tarball(const char *tarball_path, const char *dest_dir) {
     pid_t childpid;
     if ((childpid = fork()) == -1) {
-        perror("Failed to fork");
+        perror("fork");
         return -1;
     }
     if (childpid == 0) {       /* child process */
         // tar -xzf <tarball> -C ~/.local/share/repman/packages/<pkg_name>_<version>
         printf("tar -xzf %s -C %s\n", tarball_path, dest_dir);
         execlp("tar", "tar", "-xzf", tarball_path, "-C", dest_dir, NULL);
-        perror("Failed to execute tar");
+        perror("execlp");
         exit(EXIT_FAILURE);
     }
     /* parent process */
@@ -102,11 +103,11 @@ int repman_extract_tarball(const char *tarball_path, const char *dest_dir) {
         return -1;
     }
 
-    fprintf(stdout, "Tarball extracted successfully.\n");
+    printf("Tarball extracted successfully.\n");
     return 0;
 }
 
-int repman_download_pkg(const char *url, const char *pkg_and_ver, const char *os, const char *arch) {
+int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, const char *os, const char *arch) {
     int rc = 0;
     char* pkg_url = repman_resolve_download(url, pkg_and_ver, os, arch, ".tar.gz");
     char* sig_url = repman_resolve_download(url, pkg_and_ver, os, arch, ".tar.gz.minisig");
@@ -132,6 +133,10 @@ int repman_download_pkg(const char *url, const char *pkg_and_ver, const char *os
     printf("app_name: %s\n", app_name);
     char* old_installed_path = repman_path_join(pkg_dir, app_name);
     free(app_name);
+
+    char* bin_dir = repman_path_join(old_installed_path, "bin");
+
+    char* local_path = repman_get_local_path();
 
     // check if new_installed_path is a dir already
     if (repman_dir_exists(new_installed_path)) {
@@ -180,7 +185,6 @@ int repman_download_pkg(const char *url, const char *pkg_and_ver, const char *os
 
     // sanity verification of extracted content (bin dir w/ bin, etc.)
     // check for bin dir
-    char* bin_dir = repman_path_join(old_installed_path, "bin");
     if (!repman_dir_exists(bin_dir)) {
         fprintf(stderr, "Bin directory not found: %s\n", bin_dir);
         rc = -1;
@@ -197,23 +201,70 @@ int repman_download_pkg(const char *url, const char *pkg_and_ver, const char *os
 
     printf("renaming %s -> %s\n", old_installed_path, new_installed_path);
     if (rename(old_installed_path, new_installed_path) != 0) {
+        perror("rename");
         fprintf(stderr, "Failed to rename package\n");
         rc = -1;
         repman_rm(old_installed_path);
         goto cleanup;
     }
-
+    
+    // symlink executables
+    DIR *dr;
+    struct dirent *de;
+    char *new_bin_dir = repman_path_join(local_path, "bin");
+    char *installed_bin_dir = repman_path_join(new_installed_path, "bin");
+    if ((dr = opendir(installed_bin_dir)) == NULL) {
+        perror("opendir");
+        printf("Failed to open directory: %s\n", new_bin_dir);
+        return -1;
+    }
+    while ((de = readdir(dr)) != NULL) {
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+        char *installed_bin_path = repman_path_join(installed_bin_dir, de->d_name);
+        char *tmp_path = malloc(strlen(new_bin_dir) + strlen(de->d_name) + strlen(".tmp") + 1);
+        tmp_path = repman_path_join(new_bin_dir, de->d_name);
+        strcat(tmp_path, ".tmp");
+        
+        struct stat st;
+        // symlink executables to .tmp files
+        if ((stat(installed_bin_path, &st) == 0) && S_ISREG(st.st_mode)) {
+            if (symlink(installed_bin_path, tmp_path) != 0) {
+                perror("symlink");
+                fprintf(stderr, "Failed to symlink %s -> %s\n", installed_bin_path, tmp_path);
+                
+                rc = -1;
+                free(tmp_path); free(installed_bin_path);
+                repman_rm(old_installed_path);
+                goto cleanup;
+            }
+            printf("Symlinked %s -> %s\n", installed_bin_path, tmp_path);
+            
+            // atomic rewrite symlinks
+            char *tmp = repman_str_dup(tmp_path);
+            char * true_path = repman_str_repl(tmp, ".tmp", "");
+            if (rename(tmp_path, true_path) != 0) {
+                perror("rename");
+                fprintf(stderr, "Failed to atomic rewrite %s -> %s\n", tmp_path, true_path);
+                
+                rc = -1;
+                free(tmp_path); free(installed_bin_path); free(true_path);
+                repman_rm(old_installed_path);
+                goto cleanup;
+            }
+            printf("Renamed %s -> %s\n", tmp_path, true_path);
+            free(true_path);
+        } else {
+            printf("Not executable: %s\n", installed_bin_path);
+        }
+        free(installed_bin_path); free(tmp_path);
+    }
+    free(dr);
+    
     printf("Package installed successfully.\n");
-
-    // atomic symlink rewrite
-    // create symlink i.g. ~/.local/share/repman/packages/test-v1.2.10/... -> ~/.local/share/test/...
-
-
-    // remove old version directory
     
 
 cleanup:
-    repman_rm(download_dir);
+    free(bin_dir);
     free(download_dir);
     free(base_path);
     free(pkg_url);
@@ -244,7 +295,7 @@ int main() {
     char* pkg_and_ver = "test-v1.2.10";
     char* os = "ubuntu";
     char* arch = "amd64";
-    repman_download_pkg(PACKAGE_URL, pkg_and_ver, os, arch);
+    repman_download_and_install_pkg(PACKAGE_URL, pkg_and_ver, os, arch);
 
     return 0;
 }

@@ -372,6 +372,21 @@ char *repman_get_data_dir(void) {
     return base;
 }
 
+char *repman_get_local_path(void) {
+    const char *xdg = getenv("XDG_DATA_HOME");
+    char *local;
+    if (xdg != NULL && xdg[0] != '\0') {
+        local = repman_path_join(xdg, "repman");
+    } else {
+        const char *home = getenv("HOME");
+        if (home == NULL) {
+            home = getpwuid(getuid())->pw_dir;
+        }
+        local = repman_path_join(home, ".local");
+    }
+    return local;
+}
+
 void repman_ensure_dirs(void) {
     char *base  = repman_get_data_dir();
     char *index = repman_path_join(base, "index");
