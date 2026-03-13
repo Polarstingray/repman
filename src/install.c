@@ -259,11 +259,11 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
         free(installed_bin_path); free(tmp_path);
     }
     free(dr);
-    
     printf("Package installed successfully.\n");
     
 
 cleanup:
+    free(local_path);
     free(bin_dir);
     free(download_dir);
     free(base_path);
