@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <dirent.h>
 
 #define PACKAGE_URL "https://github.com/Polarstingray/packages/releases/tag/test-v1.2.10"
 #define OS "ubuntu"
@@ -15,6 +16,27 @@
 #define PUBKEY "ci.pub"
 
 // gcc src/verify.c src/util.c src/install.c src/index.c -lcurl -o ./build/install.o && ./build/install.o && tree ~/.local/share/repman
+
+int check_for_executables(const char *path) {
+    DIR *dr;
+    struct dirent *de;
+    if ((dr = opendir(path)) == NULL) {
+        perror("Failed to open directory");
+        return -1;
+    }
+    while ((de = readdir(dr)) != NULL) {
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+        char *full_path = repman_path_join(path, de->d_name);
+        if (access(full_path, X_OK) == 0) {
+            free(full_path);
+            return 0;
+        }
+        free(full_path);
+    }
+    closedir(dr);
+    printf("No executables found in: %s\n", path);
+    return 1;
+}
 
 char *repman_resolve_download(const char *url, const char *pkg_and_ver, const char *os, const char *arch, const char *ext) {
     // convert url in index to download url
@@ -111,6 +133,13 @@ int repman_download_pkg(const char *url, const char *pkg_and_ver, const char *os
     char* old_installed_path = repman_path_join(pkg_dir, app_name);
     free(app_name);
 
+    // check if new_installed_path is a dir already
+    if (repman_dir_exists(new_installed_path)) {
+        fprintf(stderr, "Package already exists: %s\n", new_installed_path);
+        rc = -1;
+        goto cleanup;
+    }
+
     repman_rm(download_dir);
     if (repman_mkdir_p(download_dir) != 0) {
         fprintf(stderr, "Failed to create tmp directory: %s\n", download_dir);
@@ -143,34 +172,26 @@ int repman_download_pkg(const char *url, const char *pkg_and_ver, const char *os
     repman_verify_sha256(pkg_path, sha256_path);
     printf("Verification Complete.\n");
 
-    // extract tarball to ~/.local/share/repman/packages/<pkg_name>_<version>
-    // char* pkg_dir = repman_path_join(base_path, "packages");
     if (repman_extract_tarball(pkg_path, pkg_dir) != 0) {
         fprintf(stderr, "Failed to extract tarball\n");
         rc = -1;
         goto cleanup;
     }
 
-    // rename <pkg_name> -> <pkg_name>_<version>
-    // char* tmp = repman_str_dup(pkg_name);
-    // char* pkg_ver = repman_str_repl(repman_str_dup(pkg_and_ver), "-v", "_v");
-    // char* new_installed_path = repman_path_join(pkg_dir, pkg_ver);
-
-    // char *app_name = strtok(pkg_ver, "_v");
-    // printf("app_name: %s\n", app_name);
-    // char* old_installed_path = repman_path_join(pkg_dir, app_name);
-    // free(app_name);
-
-    // check if new_installed_path is a dir already
-    if (!repman_dir_exists(new_installed_path)) {
-        if (rename(pkg_path, new_installed_path) != 0) {
-            fprintf(stderr, "Failed to rename package\n");
-            rc = -1;
-            goto cleanup;
-        }
-    } else {
-        fprintf(stderr, "Package already exists: %s\n", new_installed_path);
+    // sanity verification of extracted content (bin dir w/ bin, etc.)
+    // check for bin dir
+    char* bin_dir = repman_path_join(old_installed_path, "bin");
+    if (!repman_dir_exists(bin_dir)) {
+        fprintf(stderr, "Bin directory not found: %s\n", bin_dir);
         rc = -1;
+        repman_rm(old_installed_path);
+        goto cleanup;
+    }
+    // check for bin executable
+    if (check_for_executables(bin_dir) != 0) {
+        fprintf(stderr, "Bin directory contains no executables\n");
+        rc = -1;
+        repman_rm(old_installed_path);
         goto cleanup;
     }
 
@@ -184,16 +205,12 @@ int repman_download_pkg(const char *url, const char *pkg_and_ver, const char *os
 
     printf("Package installed successfully.\n");
 
-    // sanity verification of extracted content (bin dir w/ bin, etc.)
-
-
     // atomic symlink rewrite
-    // create symlink ~/.local/share/repman/packages/test-v1.2.10_ubuntu_amd64 -> ~/.local/share/repman/packages/test-v1.2.10_ubuntu_amd64.tar.gz
+    // create symlink i.g. ~/.local/share/repman/packages/test-v1.2.10/... -> ~/.local/share/test/...
 
 
     // remove old version directory
     
-
 
 cleanup:
     repman_rm(download_dir);
@@ -208,9 +225,7 @@ cleanup:
     free(old_installed_path);
     free(new_installed_path);
     return rc;
-
 }
-
 
 
 int main() {
