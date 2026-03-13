@@ -107,6 +107,111 @@ int repman_extract_tarball(const char *tarball_path, const char *dest_dir) {
     return 0;
 }
 
+static int download_package_files(const char *pkg_url, const char *sig_url, const char *sha256_url, const char *pkg_path, const char *sig_path, const char *sha256_path) {
+    if (repman_download(pkg_url, pkg_path) != 0) {
+        fprintf(stderr, "Failed to download package\n");
+        return -1;
+    }
+    if (repman_download(sig_url, sig_path) != 0) {
+        fprintf(stderr, "Failed to download signature\n");
+        return -1;
+    }
+    if (repman_download(sha256_url, sha256_path) != 0) {
+        fprintf(stderr, "Failed to download SHA256\n");
+        return -1;
+    }
+    printf("Download complete.\n");
+    return 0;
+}
+
+static int verify_package_files(const char *pkg_path, const char *sig_path, const char *sha256_path) {
+    repman_verify_minisig(pkg_path, sig_path, PUBKEY);
+    repman_verify_sha256(pkg_path, sha256_path);
+    printf("Verification Complete.\n");
+    return 0;
+}
+
+static int check_extracted_package(const char *old_installed_path, const char *bin_dir) {
+    if (!repman_dir_exists(bin_dir)) {
+        fprintf(stderr, "Bin directory not found: %s\n", bin_dir);
+        repman_rm(old_installed_path);
+        return -1;
+    }
+    if (check_for_executables(bin_dir) != 0) {
+        fprintf(stderr, "Bin directory contains no executables\n");
+        repman_rm(old_installed_path);
+        return -1;
+    }
+    return 0;
+}
+
+static int symlink_package_executables(const char *new_installed_path, const char *local_path) {
+    char *new_bin_dir = repman_path_join(local_path, "bin");
+    char *installed_bin_dir = repman_path_join(new_installed_path, "bin");
+    DIR *dr = opendir(installed_bin_dir);
+    if (dr == NULL) {
+        perror("opendir");
+        fprintf(stderr, "Failed to open directory: %s\n", installed_bin_dir);
+        free(new_bin_dir);
+        free(installed_bin_dir);
+        return -1;
+    }
+    struct dirent *de;
+    while ((de = readdir(dr)) != NULL) {
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+        char *installed_bin_path = repman_path_join(installed_bin_dir, de->d_name);
+        char *target_path = repman_path_join(new_bin_dir, de->d_name);
+        size_t tmp_len = strlen(target_path) + 5;
+        char *tmp_path = malloc(tmp_len);
+        if (!tmp_path) {
+            perror("malloc");
+            free(installed_bin_path);
+            free(target_path);
+            closedir(dr);
+            free(new_bin_dir);
+            free(installed_bin_dir);
+            return -1;
+        }
+        snprintf(tmp_path, tmp_len, "%s.tmp", target_path);
+        struct stat st;
+        if (stat(installed_bin_path, &st) == 0 && S_ISREG(st.st_mode)) {
+            if (symlink(installed_bin_path, tmp_path) != 0) {
+                perror("symlink");
+                fprintf(stderr, "Failed to symlink %s -> %s\n", installed_bin_path, tmp_path);
+                free(tmp_path);
+                free(installed_bin_path);
+                free(target_path);
+                closedir(dr);
+                free(new_bin_dir);
+                free(installed_bin_dir);
+                return -1;
+            }
+            printf("Symlinked %s -> %s\n", installed_bin_path, tmp_path);
+            if (rename(tmp_path, target_path) != 0) {
+                perror("rename");
+                fprintf(stderr, "Failed to atomic rewrite %s -> %s\n", tmp_path, target_path);
+                free(tmp_path);
+                free(installed_bin_path);
+                free(target_path);
+                closedir(dr);
+                free(new_bin_dir);
+                free(installed_bin_dir);
+                return -1;
+            }
+            printf("Renamed %s -> %s\n", tmp_path, target_path);
+        } else {
+            printf("Not executable: %s\n", installed_bin_path);
+        }
+        free(installed_bin_path);
+        free(target_path);
+        free(tmp_path);
+    }
+    closedir(dr);
+    free(new_bin_dir);
+    free(installed_bin_dir);
+    return 0;
+}
+
 int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, const char *os, const char *arch) {
     int rc = 0;
     char* pkg_url = repman_resolve_download(url, pkg_and_ver, os, arch, ".tar.gz");
@@ -117,22 +222,16 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
     char* base_path = repman_get_data_dir();
     char* download_dir = repman_path_join(base_path, "tmp");
 
-    char* pkg_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz");
-    char* sig_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz.minisig");
-    char* sha256_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz.sha256");
-    char* pkg_path = repman_path_join(download_dir, pkg_name);
-    char* sig_path = repman_path_join(download_dir, sig_name);
-    char* sha256_path = repman_path_join(download_dir, sha256_name);
-    free(pkg_name); free(sig_name); free(sha256_name);
-
     char* pkg_dir = repman_path_join(base_path, "packages");
     char* pkg_ver = repman_str_repl(repman_str_dup(pkg_and_ver), "-v", "_v");
     char* new_installed_path = repman_path_join(pkg_dir, pkg_ver);
 
-    char *app_name = strtok(pkg_ver, "_v");
-    printf("app_name: %s\n", app_name);
+    // Extract app_name without modifying pkg_ver
+    char* pkg_ver_dup = repman_str_dup(pkg_ver);
+    char* v_pos = strstr(pkg_ver_dup, "_v");
+    if (v_pos) *v_pos = '\0';
+    char* app_name = pkg_ver_dup;
     char* old_installed_path = repman_path_join(pkg_dir, app_name);
-    free(app_name);
 
     char* bin_dir = repman_path_join(old_installed_path, "bin");
 
@@ -152,30 +251,29 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
         goto cleanup;
     }
 
+    char* pkg_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz");
+    char* sig_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz.minisig");
+    char* sha256_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz.sha256");
+    char* pkg_path = repman_path_join(download_dir, pkg_name);
+    char* sig_path = repman_path_join(download_dir, sig_name);
+    char* sha256_path = repman_path_join(download_dir, sha256_name);
+    free(pkg_name); free(sig_name); free(sha256_name);
+
     if (!pkg_url || !sig_url || !sha256_url) {
         fprintf(stderr, "Failed to resolve download URLs\n");
         rc = -1;
         goto cleanup;
     }
 
-    if (repman_download(pkg_url, pkg_path) != 0) {
-        fprintf(stderr, "Failed to download package\n");
-        rc = -1;
-        goto cleanup;
-    } else if (repman_download(sig_url, sig_path) != 0) {
-        fprintf(stderr, "Failed to download signature\n");
-        rc = -1;
-        goto cleanup;
-    } else if (repman_download(sha256_url, sha256_path) != 0) {
-        fprintf(stderr, "Failed to download SHA256\n");
+    if (download_package_files(pkg_url, sig_url, sha256_url, pkg_path, sig_path, sha256_path) != 0) {
         rc = -1;
         goto cleanup;
     }
-    printf("Download complete.\n");
 
-    repman_verify_minisig(pkg_path, sig_path, PUBKEY);
-    repman_verify_sha256(pkg_path, sha256_path);
-    printf("Verification Complete.\n");
+    if (verify_package_files(pkg_path, sig_path, sha256_path) != 0) {
+        rc = -1;
+        goto cleanup;
+    }
 
     if (repman_extract_tarball(pkg_path, pkg_dir) != 0) {
         fprintf(stderr, "Failed to extract tarball\n");
@@ -183,21 +281,11 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
         goto cleanup;
     }
 
-    // sanity verification of extracted content (bin dir w/ bin, etc.)
-    // check for bin dir
-    if (!repman_dir_exists(bin_dir)) {
-        fprintf(stderr, "Bin directory not found: %s\n", bin_dir);
+    if (check_extracted_package(old_installed_path, bin_dir) != 0) {
         rc = -1;
-        repman_rm(old_installed_path);
         goto cleanup;
     }
-    // check for bin executable
-    if (check_for_executables(bin_dir) != 0) {
-        fprintf(stderr, "Bin directory contains no executables\n");
-        rc = -1;
-        repman_rm(old_installed_path);
-        goto cleanup;
-    }
+    repman_rm(download_dir);
 
     printf("renaming %s -> %s\n", old_installed_path, new_installed_path);
     if (rename(old_installed_path, new_installed_path) != 0) {
@@ -208,63 +296,22 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
         goto cleanup;
     }
     
-    // symlink executables
-    DIR *dr;
-    struct dirent *de;
-    char *new_bin_dir = repman_path_join(local_path, "bin");
-    char *installed_bin_dir = repman_path_join(new_installed_path, "bin");
-    if ((dr = opendir(installed_bin_dir)) == NULL) {
-        perror("opendir");
-        printf("Failed to open directory: %s\n", new_bin_dir);
-        return -1;
+    if (symlink_package_executables(new_installed_path, local_path) != 0) {
+        rc = -1;
+        goto cleanup;
     }
-    while ((de = readdir(dr)) != NULL) {
-        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
-        char *installed_bin_path = repman_path_join(installed_bin_dir, de->d_name);
-        char *tmp_path = malloc(strlen(new_bin_dir) + strlen(de->d_name) + strlen(".tmp") + 1);
-        tmp_path = repman_path_join(new_bin_dir, de->d_name);
-        strcat(tmp_path, ".tmp");
-        
-        struct stat st;
-        // symlink executables to .tmp files
-        if ((stat(installed_bin_path, &st) == 0) && S_ISREG(st.st_mode)) {
-            if (symlink(installed_bin_path, tmp_path) != 0) {
-                perror("symlink");
-                fprintf(stderr, "Failed to symlink %s -> %s\n", installed_bin_path, tmp_path);
-                
-                rc = -1;
-                free(tmp_path); free(installed_bin_path);
-                repman_rm(old_installed_path);
-                goto cleanup;
-            }
-            printf("Symlinked %s -> %s\n", installed_bin_path, tmp_path);
-            
-            // atomic rewrite symlinks
-            char *tmp = repman_str_dup(tmp_path);
-            char * true_path = repman_str_repl(tmp, ".tmp", "");
-            if (rename(tmp_path, true_path) != 0) {
-                perror("rename");
-                fprintf(stderr, "Failed to atomic rewrite %s -> %s\n", tmp_path, true_path);
-                
-                rc = -1;
-                free(tmp_path); free(installed_bin_path); free(true_path);
-                repman_rm(old_installed_path);
-                goto cleanup;
-            }
-            printf("Renamed %s -> %s\n", tmp_path, true_path);
-            free(true_path);
-        } else {
-            printf("Not executable: %s\n", installed_bin_path);
-        }
-        free(installed_bin_path); free(tmp_path);
-    }
-    free(dr);
+
     printf("Package installed successfully.\n");
     
 
 cleanup:
     free(local_path);
     free(bin_dir);
+    free(old_installed_path);
+    free(app_name);
+    free(new_installed_path);
+    free(pkg_ver);
+    free(pkg_dir);
     free(download_dir);
     free(base_path);
     free(pkg_url);
@@ -273,8 +320,6 @@ cleanup:
     free(pkg_path);
     free(sig_path);
     free(sha256_path);
-    free(old_installed_path);
-    free(new_installed_path);
     return rc;
 }
 
