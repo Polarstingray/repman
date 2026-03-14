@@ -2,6 +2,7 @@
 
 #include "lib/verify.h"
 #include "lib/util.h"
+#include "lib/index.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +11,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <cjson/cJSON.h>
 
 #define PACKAGE_URL "https://github.com/Polarstingray/packages/releases/tag/test-v1.2.10"
 #define OS "ubuntu"
@@ -233,9 +235,12 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
     char* app_name = pkg_ver_dup;
     char* old_installed_path = repman_path_join(pkg_dir, app_name);
 
-    char* bin_dir = repman_path_join(old_installed_path, "bin");
+    char* bin_dir = NULL;
+    char* local_path = NULL;
 
-    char* local_path = repman_get_local_path();
+    char* pkg_path = NULL;
+    char* sig_path = NULL;
+    char* sha256_path = NULL;
 
     // check if new_installed_path is a dir already
     if (repman_dir_exists(new_installed_path)) {
@@ -243,6 +248,9 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
         rc = -1;
         goto cleanup;
     }
+
+    bin_dir = repman_path_join(old_installed_path, "bin");
+    local_path = repman_get_local_path();
 
     repman_rm(download_dir);
     if (repman_mkdir_p(download_dir) != 0) {
@@ -254,9 +262,9 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
     char* pkg_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz");
     char* sig_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz.minisig");
     char* sha256_name = repman_pkg_name(pkg_and_ver, os, arch, ".tar.gz.sha256");
-    char* pkg_path = repman_path_join(download_dir, pkg_name);
-    char* sig_path = repman_path_join(download_dir, sig_name);
-    char* sha256_path = repman_path_join(download_dir, sha256_name);
+    pkg_path = repman_path_join(download_dir, pkg_name);
+    sig_path = repman_path_join(download_dir, sig_name);
+    sha256_path = repman_path_join(download_dir, sha256_name);
     free(pkg_name); free(sig_name); free(sha256_name);
 
     if (!pkg_url || !sig_url || !sha256_url) {
@@ -338,11 +346,37 @@ int main() {
     repman_ensure_dirs();
 
     char* pkg_and_ver = "test-v1.2.10";
+    char* pkg_name = "test";
+    char* pkg_ver = "1.2.10";
     char* os = "ubuntu";
     char* arch = "amd64";
-    repman_download_and_install_pkg(PACKAGE_URL, pkg_and_ver, os, arch);
 
-    return 0;
+    char *index_path = repman_full_path("index", "index.json");
+    cJSON *index = repman_parse_index(index_path);
+    free(index_path);
+    if (index == NULL) {
+        fprintf(stderr, "Failed to parse index\n");
+        return -1;
+    }
+    cJSON *target = get_pkg(index, pkg_name, pkg_ver, os, arch);
+    if (target == NULL) {
+        fprintf(stderr, "Failed to find package: %s\n", pkg_name);
+        cJSON_Delete(index);
+        return -1;
+    }
+    char *pkg_url = repman_get_pkg_url(target);
+    if (pkg_url == NULL) {
+        fprintf(stderr, "Failed to get package URL\n");
+        cJSON_Delete(index);
+        return -1;
+    }
+
+    int rc = repman_download_and_install_pkg(pkg_url, pkg_and_ver, os, arch);
+
+    free(pkg_url);
+    cJSON_Delete(index);
+
+    return rc;
 }
 
 // https://github.com/Polarstingray/packages/releases/download/test-v1.1.10/test_v1.2.10_ubuntu_amd64.tar.gz

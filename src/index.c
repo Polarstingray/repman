@@ -26,9 +26,106 @@ char* repman_full_path(const char *dir_, const char *name) {
     return path;
 }
 
-char* repman_get_pkg_url(const char *name) {
 
+cJSON *repman_parse_index(const char *filepath) {
+    char* buf = repman_read_file(filepath, NULL);
+    if (buf == NULL) {
+        fprintf(stderr, "Failed to read file: %s\n", filepath);
+        return NULL;
+    }
+    cJSON *root = cJSON_Parse(buf);
+    if (root == NULL) {
+        const char *error_ptr = cJSON_GetErrorPtr();
+        if (error_ptr != NULL) {
+            fprintf(stderr, "Error before: %s\n", error_ptr);
+        }
+        free(buf);
+        return NULL;
+    }
+    free(buf);
+    return root;
 }
+
+cJSON *get_pkg(cJSON *index, const char* name, const char* version, const char* os, const char* arch) {
+    cJSON *pkg = cJSON_GetObjectItemCaseSensitive(index, name);
+    if (pkg == NULL) {
+        fprintf(stderr, "Package not found: %s\n", name);
+        return NULL;
+    }
+
+    const char *ver_to_use = version;
+    if (ver_to_use == NULL || strlen(ver_to_use) == 0) {
+        cJSON *latest = cJSON_GetObjectItemCaseSensitive(pkg, "latest");
+        if (latest && cJSON_IsString(latest)) {
+            ver_to_use = latest->valuestring;
+        } else {
+            fprintf(stderr, "No version specified and no latest version found for package: %s\n", name);
+            return NULL;
+        }
+    }
+
+    cJSON *versions = cJSON_GetObjectItemCaseSensitive(pkg, "versions");
+    if (versions == NULL) {
+        fprintf(stderr, "No versions found for package: %s\n", name);
+        return NULL;
+    }
+
+    cJSON *ver_obj = cJSON_GetObjectItemCaseSensitive(versions, ver_to_use);
+    if (ver_obj == NULL) {
+        fprintf(stderr, "Version %s not found for package: %s\n", ver_to_use, name);
+        return NULL;
+    }
+
+    cJSON *targets = cJSON_GetObjectItemCaseSensitive(ver_obj, "targets");
+    if (targets == NULL) {
+        fprintf(stderr, "No targets found for version %s of package: %s\n", ver_to_use, name);
+        return NULL;
+    }
+
+    char os_arch[256];
+    snprintf(os_arch, sizeof(os_arch), "%s_%s", os, arch);
+
+    cJSON *target = cJSON_GetObjectItemCaseSensitive(targets, os_arch);
+    if (target == NULL) {
+        fprintf(stderr, "Target %s not found for version %s of package: %s\n", os_arch, ver_to_use, name);
+        return NULL;
+    }
+
+    return target;
+}
+
+char* repman_get_pkg_url(cJSON *target)  {
+    cJSON *url = cJSON_GetObjectItemCaseSensitive(target, "url");
+    if (url == NULL) {
+        fprintf(stderr, "No URL found for target\n");
+        return NULL;
+    }
+    return repman_str_dup(url->valuestring);
+}
+
+int cmp_versions(const char *a, const char *b) {
+    int maj1, min1, pat1, maj2, min2, pat2;
+
+    if (sscanf(a, "%d.%d.%d", &maj1, &min1, &pat1) != 3) {
+        fprintf(stderr, "Invalid version format: %s\n", a);
+        return -2;
+    }
+
+    if (sscanf(b, "%d.%d.%d", &maj2, &min2, &pat2) != 3) {
+        fprintf(stderr, "Invalid version format: %s\n", b);
+        return -2;
+    }
+    if (maj1 > maj2) return 1;
+    if (maj1 < maj2) return -1;
+
+    if (min1 > min2) return 1;
+    if (min1 < min2) return -1;
+    
+    if (pat1 > pat2) return 1;
+    if (pat1 < pat2) return -1;
+    return 0;
+}
+
 
 // download, verify, and atomic rewrite
 int repman_update_index(void) {
@@ -142,6 +239,8 @@ cleanup:
 
 // int main() {
 //     repman_ensure_dirs();
-//     repman_update_index();
+//     // repman_update_index();
+
+
 //     return 0;
 // }
