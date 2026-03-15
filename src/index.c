@@ -310,7 +310,7 @@ int repman_update_installed(const char* installed_path, const char *name, const 
     cJSON *installed = repman_parse_json(installed_path);
     if (installed == NULL) {
         fprintf(stderr, "Failed to parse installed file: %s\n", installed_path);
-        return -1;
+        installed = cJSON_Parse("{}");
     }
     cJSON *pkg = cJSON_GetObjectItemCaseSensitive(installed, name);
     if ( pkg != NULL ) {
@@ -330,7 +330,6 @@ int repman_update_installed(const char* installed_path, const char *name, const 
         free(installed_str); cJSON_Delete(installed);
         return -1;
     }
-    printf("Successfully added %s to installed list\n", name);
     free(installed_str); cJSON_Delete(installed);
     return 0;
 }

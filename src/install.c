@@ -301,6 +301,9 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
     char* sig_path = NULL;
     char* sha256_path = NULL;
 
+    char* index_dir = repman_full_path("index", "");
+    char* installed = repman_path_join(index_dir, "installed.json");
+
     size_t ver_need = (strlen(pkg_ver) - strlen(app_name) - strlen("_v") + 1);
     char *ver = malloc(ver_need);
     memcpy(ver, pkg_ver + (strlen(app_name) + strlen("_v")), ver_need);
@@ -308,7 +311,19 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
     // check if new_installed_path is a dir already
     if (repman_dir_exists(new_installed_path) != 0) {
         fprintf(stderr, "Package already exists: %s\n", new_installed_path);
-        rc = -1;
+        fprintf(stderr, "Checking installation list\n");
+        // Change, Hardcoding INSTALL_JSON
+        int installed_rc = repman_update_installed(installed, app_name, ver, "install");
+        if (installed_rc == 0) {
+            printf("Added %s v%s to installation list\n", app_name, ver);
+            rc = 1;
+            goto cleanup;
+        } else if (installed_rc != 1) {
+            fprintf(stderr, "Failed to update installed.json\n");
+            rc = -1;
+        } else  {
+            rc = installed_rc;
+        }
         goto cleanup;
     }
 
@@ -407,62 +422,66 @@ cleanup:
     free(pkg_path);
     free(sig_path);
     free(sha256_path);
+
+    free(index_dir);
+    free(installed);
     return rc;
 }
 
+int repman_install_latest(const char* name, const char* os, const char* arch) {
+    // remove hardcoded INSTALL_JSON
+    char *installed_json = repman_full_path("index", "installed.json");
+    char* curr_pkg_ver = repman_get_installed_version(INSTALL_JSON, name);
 
-#ifndef TESTING
-int main() {
-    // char *url = repman_resolve_download(PACKAGE_URL, "test_v1.2.10", "ubuntu", "amd64", ".tar.gz");
-    // printf("Download URL: %s\n", url);
-
-    // printf("Downloading...");
-    // char* pkg_name = repman_pkg_name("test-v1.2.10", "ubuntu", "amd64", ".tar.gz");
-    // printf("Package Name: %s\n", pkg_name);
-    // repman_download(url, pkg_name);
-    // printf("Download complete.\n");
-    // free(url); free(pkg_name);
-
-    repman_ensure_dirs();
-
-    char* pkg_name = "test";
-    char* os = "ubuntu";
-    char* arch = "amd64";
-    char* pkg_ver = repman_get_installed_version(INSTALL_JSON, pkg_name);
-    if (pkg_ver == NULL) {
-        pkg_ver = repman_str_dup("0.0.0");
-        printf("Not installed\n");
-    } else {
-        printf("installed version: %s\n", pkg_ver);
+    if (curr_pkg_ver == NULL) {
+        curr_pkg_ver = repman_str_dup("0.0.0");
     }
-
     char *index_path = repman_full_path("index", "index.json");
+    char *resolved_version = get_version(index_path, name, curr_pkg_ver, os, arch);
 
-    char *resolved_version = get_version(index_path, pkg_name, pkg_ver, os, arch);
     if (resolved_version == NULL) {
-        fprintf(stderr, "Failed to determine version for package: %s\n", pkg_name);
-        free(index_path); free(pkg_ver); free(resolved_version);
+        fprintf(stderr, "Failed to determine version for package: %s\n", name);
+        free(index_path); free(curr_pkg_ver); free(resolved_version);
         return -1;
     }
 
-    char pkg_and_ver[32];
-    sprintf(pkg_and_ver, "%s-v%s", pkg_name, resolved_version);
-
-    char *pkg_url = repman_get_pkg_url(index_path, pkg_name, resolved_version, os, arch);
+    char *pkg_and_ver = malloc(strlen(name) + strlen(resolved_version) + 3);
+    if (pkg_and_ver == NULL) {
+        free(index_path); free(curr_pkg_ver); free(resolved_version);
+        printf("Failed to malloc pkg_and_ver\n");
+        return -1;
+    }
+    
+    // pkg_url & pkg_and_ver should be obtained in download_and_install_pkg()
+    sprintf(pkg_and_ver, "%s-v%s", name, resolved_version);
+    char *pkg_url = repman_get_pkg_url(index_path, name, resolved_version, os, arch);
     free(resolved_version); resolved_version = NULL;
     if (pkg_url == NULL) {
         fprintf(stderr, "Failed to get package URL\n");
-        free(index_path); free(pkg_ver); 
+        free(index_path); free(curr_pkg_ver);  free(pkg_and_ver);
         return -1;
     }
 
     int rc = repman_download_and_install_pkg(pkg_url, pkg_and_ver, os, arch);
 
     free(pkg_url);
-    free(pkg_ver);
+    free(curr_pkg_ver);
     free(index_path);
-
+    free(pkg_and_ver);
     return rc;
+}
+
+
+#ifndef TESTING
+int main() {
+
+    repman_ensure_dirs();
+
+    char* pkg_name = "affirm";
+    char* os = "ubuntu";
+    char* arch = "amd64";
+
+    int rc = repman_install_latest(pkg_name, os, arch);
 }
 #endif
 
