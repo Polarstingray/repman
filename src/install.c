@@ -1,4 +1,4 @@
-
+#define _POSIX_C_SOURCE 200809L
 
 #include "lib/verify.h"
 #include "lib/util.h"
@@ -17,9 +17,13 @@
 #define OS "ubuntu"
 #define ARCH "amd64"
 #define PUBKEY "ci.pub"
+#define INSTALL_JSON "index/installed.json"
 
-// gcc src/verify.c src/util.c src/install.c src/index.c -lcurl -o ./build/install.o && ./build/install.o && tree ~/.local/share/repman
-// rm -rf ~/.local/share/repman/packages/*
+/*
+ * Example run:
+    rm -rf ~/.local/share/repman/packages/*
+    gcc src/verify.c src/util.c src/install.c src/index.c -lcjson -lcurl -o ./build/install.o && ./build/install.o && tree ~/.local/share/repman
+ */
 int check_for_executables(const char *path) {
     DIR *dr;
     struct dirent *de;
@@ -134,7 +138,7 @@ static int verify_package_files(const char *pkg_path, const char *sig_path, cons
 }
 
 static int check_extracted_package(const char *old_installed_path, const char *bin_dir) {
-    if (!repman_dir_exists(bin_dir)) {
+    if (repman_dir_exists(bin_dir) == 0) {
         fprintf(stderr, "Bin directory not found: %s\n", bin_dir);
         repman_rm(old_installed_path);
         return -1;
@@ -147,70 +151,125 @@ static int check_extracted_package(const char *old_installed_path, const char *b
     return 0;
 }
 
-static int symlink_package_executables(const char *new_installed_path, const char *local_path) {
-    char *new_bin_dir = repman_path_join(local_path, "bin");
-    char *installed_bin_dir = repman_path_join(new_installed_path, "bin");
-    DIR *dr = opendir(installed_bin_dir);
-    if (dr == NULL) {
-        perror("opendir");
-        fprintf(stderr, "Failed to open directory: %s\n", installed_bin_dir);
-        free(new_bin_dir);
-        free(installed_bin_dir);
+
+static int symlink_pkg_data(const char *installed_path, const char *local_path, const char* pkg_name) {
+    char *new_tmp_dir = malloc(strlen(installed_path) + strlen("/share/") + strlen(pkg_name) + strlen("_tmp") + 1);
+    new_tmp_dir = repman_path_join(local_path, "share");
+    new_tmp_dir = repman_path_join(new_tmp_dir, pkg_name);
+    strcat(new_tmp_dir, "_tmp");
+    char *installed_data_dir = repman_path_join(installed_path, "data");
+
+    struct stat st;
+    if ((stat(installed_data_dir, &st) != 0) || !S_ISDIR(st.st_mode)){
+        perror("stat");
+        free(installed_data_dir);
+        free(new_tmp_dir);
         return -1;
+    }
+
+    if (symlink(installed_data_dir, new_tmp_dir) != 0) {
+        perror("symlink");
+        fprintf(stderr, "Failed to symlink %s -> %s\n", installed_data_dir, new_tmp_dir);
+        free(new_tmp_dir); free(installed_data_dir);
+        return -1;
+    }
+    printf("Symlinked %s -> %s\n", installed_data_dir, new_tmp_dir);
+
+    char *new_data_dir = repman_str_dup(new_tmp_dir);
+    repman_str_repl(new_data_dir, "_tmp", ""); 
+    if (rename(new_tmp_dir, new_data_dir) != 0) {
+        perror("rename");
+        fprintf(stderr, "Failed to atomic rewrite %s -> %s\n", new_tmp_dir, new_data_dir);
+        free(new_data_dir); free(installed_data_dir); free(new_tmp_dir);
+        return -1;
+    }
+    printf("Renamed %s -> %s\n", new_tmp_dir, new_data_dir);
+    free(new_data_dir); free(installed_data_dir); free(new_tmp_dir);
+    return 0;
+}
+
+static int symlink_pkg_files(const char *new_installed_path, const char *local_path, const char *type) {
+    char *new_type_dir = repman_path_join(local_path, type);
+    char *installed_type_dir = repman_path_join(new_installed_path, type);
+    DIR *dr = opendir(installed_type_dir);
+    if (dr == NULL) {
+        if (!strcmp(type, "lib")) {
+            perror("opendir");
+            fprintf(stderr, "Failed to open directory: %s\n", installed_type_dir);
+        } else {
+            printf("No lib directory in: %s\n", installed_type_dir);
+        }
+        free(new_type_dir);
+        free(installed_type_dir);
+        return -2;
     }
     struct dirent *de;
     while ((de = readdir(dr)) != NULL) {
         if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
-        char *installed_bin_path = repman_path_join(installed_bin_dir, de->d_name);
-        char *target_path = repman_path_join(new_bin_dir, de->d_name);
+        char *installed_type_path = repman_path_join(installed_type_dir, de->d_name);
+        char *target_path = repman_path_join(new_type_dir, de->d_name);
         size_t tmp_len = strlen(target_path) + 5;
         char *tmp_path = malloc(tmp_len);
         if (!tmp_path) {
             perror("malloc");
-            free(installed_bin_path);
+            free(installed_type_path);
             free(target_path);
             closedir(dr);
-            free(new_bin_dir);
-            free(installed_bin_dir);
+            free(new_type_dir);
+            free(installed_type_dir);
             return -1;
         }
         snprintf(tmp_path, tmp_len, "%s.tmp", target_path);
         struct stat st;
-        if (stat(installed_bin_path, &st) == 0 && S_ISREG(st.st_mode)) {
-            if (symlink(installed_bin_path, tmp_path) != 0) {
-                perror("symlink");
-                fprintf(stderr, "Failed to symlink %s -> %s\n", installed_bin_path, tmp_path);
-                free(tmp_path);
-                free(installed_bin_path);
-                free(target_path);
-                closedir(dr);
-                free(new_bin_dir);
-                free(installed_bin_dir);
-                return -1;
-            }
-            printf("Symlinked %s -> %s\n", installed_bin_path, tmp_path);
-            if (rename(tmp_path, target_path) != 0) {
-                perror("rename");
-                fprintf(stderr, "Failed to atomic rewrite %s -> %s\n", tmp_path, target_path);
-                free(tmp_path);
-                free(installed_bin_path);
-                free(target_path);
-                closedir(dr);
-                free(new_bin_dir);
-                free(installed_bin_dir);
-                return -1;
-            }
-            printf("Renamed %s -> %s\n", tmp_path, target_path);
-        } else {
-            printf("Not executable: %s\n", installed_bin_path);
+
+        if ((stat(installed_type_path, &st) != 0) || !S_ISREG(st.st_mode)){
+            perror("stat");
+            free(installed_type_path);
+            free(target_path);
+            free(tmp_path);
+            continue;
+        } 
+        if (strcmp(type, "bin") && !((st.st_mode & S_IXUSR) || 
+            (st.st_mode & S_IXGRP) || (st.st_mode & S_IXOTH))) {
+            fprintf(stderr, "File is not executable: %s\n", installed_type_path);
+            free(installed_type_path);
+            free(target_path);
+            free(tmp_path);
+            continue;
         }
-        free(installed_bin_path);
+        
+        if (symlink(installed_type_path, tmp_path) != 0) {
+            perror("symlink");
+            fprintf(stderr, "Failed to symlink %s -> %s\n", installed_type_path, tmp_path);
+            free(tmp_path);
+            free(installed_type_path);
+            free(target_path);
+            closedir(dr);
+            free(new_type_dir);
+            free(installed_type_dir);
+            return -1;
+        }
+        printf("Symlinked %s -> %s\n", installed_type_path, tmp_path);
+        if (rename(tmp_path, target_path) != 0) {
+            perror("rename");
+            fprintf(stderr, "Failed to atomic rewrite %s -> %s\n", tmp_path, target_path);
+            free(tmp_path);
+            free(installed_type_path);
+            free(target_path);
+            closedir(dr);
+            free(new_type_dir);
+            free(installed_type_dir);
+            return -1;
+        }
+        printf("Renamed %s -> %s\n", tmp_path, target_path);
+
+        free(installed_type_path);
         free(target_path);
         free(tmp_path);
     }
     closedir(dr);
-    free(new_bin_dir);
-    free(installed_bin_dir);
+    free(new_type_dir);
+    free(installed_type_dir);
     return 0;
 }
 
@@ -242,8 +301,12 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
     char* sig_path = NULL;
     char* sha256_path = NULL;
 
+    size_t ver_need = (strlen(pkg_ver) - strlen(app_name) - strlen("_v") + 1);
+    char *ver = malloc(ver_need);
+    memcpy(ver, pkg_ver + (strlen(app_name) + strlen("_v")), ver_need);
+
     // check if new_installed_path is a dir already
-    if (repman_dir_exists(new_installed_path)) {
+    if (repman_dir_exists(new_installed_path) != 0) {
         fprintf(stderr, "Package already exists: %s\n", new_installed_path);
         rc = -1;
         goto cleanup;
@@ -304,7 +367,24 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
         goto cleanup;
     }
     
-    if (symlink_package_executables(new_installed_path, local_path) != 0) {
+    if (symlink_pkg_files(new_installed_path, local_path, "bin") != 0) {
+        rc = -1;
+        goto cleanup;
+    }
+    int lib_rc = symlink_pkg_files(new_installed_path, local_path, "lib");
+    if (lib_rc != 0 && lib_rc != -2) {
+        rc = -1;
+        goto cleanup;
+    }
+
+    if (symlink_pkg_data(new_installed_path, local_path, app_name) != 0) {
+        rc = -1;
+        goto cleanup;
+    }
+
+    int installed_rc = repman_update_installed(INSTALL_JSON, app_name, ver, "install");
+    if (installed_rc != 0 && installed_rc != 1) {
+        fprintf(stderr, "Failed to update installed.json\n");
         rc = -1;
         goto cleanup;
     }
@@ -313,6 +393,7 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
     
 
 cleanup:
+    free(ver);
     free(local_path);
     free(bin_dir);
     free(old_installed_path);
@@ -332,6 +413,7 @@ cleanup:
 }
 
 
+#ifndef TESTING
 int main() {
     // char *url = repman_resolve_download(PACKAGE_URL, "test_v1.2.10", "ubuntu", "amd64", ".tar.gz");
     // printf("Download URL: %s\n", url);
@@ -345,26 +427,41 @@ int main() {
 
     repman_ensure_dirs();
 
-    char* pkg_and_ver = "test-v1.2.10";
-    char* pkg_name = "test";
-    char* pkg_ver = "1.2.10";
+    // char* pkg_and_ver = "test-v1.2.10";
+    char* pkg_name = "affirm";
+    char* pkg_ver = "1.0.0";
     char* os = "ubuntu";
     char* arch = "amd64";
 
     char *index_path = repman_full_path("index", "index.json");
-    cJSON *index = repman_parse_index(index_path);
-    free(index_path);
+    cJSON *index = repman_parse_json(index_path);
     if (index == NULL) {
         fprintf(stderr, "Failed to parse index\n");
         return -1;
     }
-    cJSON *target = get_pkg(index, pkg_name, pkg_ver, os, arch);
-    if (target == NULL) {
-        fprintf(stderr, "Failed to find package: %s\n", pkg_name);
+    
+    char *resolved_version = get_version(index_path, pkg_name, pkg_ver, os, arch);
+    free(index_path);
+    if (resolved_version == NULL) {
+        fprintf(stderr, "Failed to determine version for package: %s\n", pkg_name);
         cJSON_Delete(index);
         return -1;
     }
+
+    char pkg_and_ver[32];
+    sprintf(pkg_and_ver, "%s-v%s", pkg_name, resolved_version);
+
+    cJSON *pkg = cJSON_GetObjectItemCaseSensitive(index, pkg_name);
+    cJSON *target = get_pkg(pkg, resolved_version, os, arch);
+    if (target == NULL) {
+        fprintf(stderr, "Failed to find package target %s/%s for version %s\n", os, arch, resolved_version);
+        free(resolved_version);
+        cJSON_Delete(index);
+        return -1;
+    }
+
     char *pkg_url = repman_get_pkg_url(target);
+    free(resolved_version);
     if (pkg_url == NULL) {
         fprintf(stderr, "Failed to get package URL\n");
         cJSON_Delete(index);
@@ -378,6 +475,7 @@ int main() {
 
     return rc;
 }
+#endif
 
 // https://github.com/Polarstingray/packages/releases/download/test-v1.1.10/test_v1.2.10_ubuntu_amd64.tar.gz
 // 

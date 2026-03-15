@@ -59,8 +59,8 @@ static void test_cmp_versions(void) {
     CHECK(cmp_versions("1.0.0", "1.0") == -2);
 }
 
-static void test_repman_parse_index(void) {
-    printf("\n[test_repman_parse_index]\n");
+static void test_repman_parse_json(void) {
+    printf("\n[test_repman_parse_json]\n");
 
     const char *index_path = "index/index.json";
     if (!repman_file_exists(index_path)) {
@@ -68,7 +68,7 @@ static void test_repman_parse_index(void) {
         return;
     }
 
-    cJSON *index = repman_parse_index(index_path);
+    cJSON *index = repman_parse_json(index_path);
     CHECK(index != NULL);
     if (index) {
         CHECK(cJSON_IsObject(index));
@@ -85,22 +85,28 @@ static void test_get_pkg(void) {
         return;
     }
 
-    cJSON *index = repman_parse_index(index_path);
+    cJSON *index = repman_parse_json(index_path);
     if (!index) {
         SKIP("failed to parse index");
         return;
     }
 
     // Test with a known package, assuming "test" exists
-    cJSON *target = get_pkg(index, "test", "1.2.10", "ubuntu", "amd64");
-    CHECK(target != NULL);
-    if (target) {
-        CHECK(cJSON_IsObject(target));
+    char *resolved = get_version(index_path, "test", "1.2.10", "ubuntu", "amd64");
+    CHECK(resolved != NULL);
+    if (resolved) {
+        cJSON *pkg = cJSON_GetObjectItemCaseSensitive(index, "test");
+        cJSON *target = get_pkg(pkg, resolved, "ubuntu", "amd64");
+        CHECK(target != NULL);
+        if (target) {
+            CHECK(cJSON_IsObject(target));
+        }
+        free(resolved);
     }
 
     // Test with invalid package
-    cJSON *invalid = get_pkg(index, "nonexistent", "1.0.0", "ubuntu", "amd64");
-    CHECK(invalid == NULL);
+    char *invalid_version = get_version(index_path, "nonexistent", "1.0.0", "ubuntu", "amd64");
+    CHECK(invalid_version == NULL);
 
     cJSON_Delete(index);
 }
@@ -114,13 +120,22 @@ static void test_repman_get_pkg_url(void) {
         return;
     }
 
-    cJSON *index = repman_parse_index(index_path);
+    cJSON *index = repman_parse_json(index_path);
     if (!index) {
         SKIP("failed to parse index");
         return;
     }
 
-    cJSON *target = get_pkg(index, "test", "1.2.10", "ubuntu", "amd64");
+    char *resolved = get_version(index_path, "test", "1.2.10", "ubuntu", "amd64");
+    if (!resolved) {
+        SKIP("failed to resolve version");
+        cJSON_Delete(index);
+        return;
+    }
+
+    cJSON *pkg = cJSON_GetObjectItemCaseSensitive(index, "test");
+    cJSON *target = get_pkg(pkg, resolved, "ubuntu", "amd64");
+    free(resolved);
     if (!target) {
         SKIP("target not found");
         cJSON_Delete(index);
@@ -156,7 +171,7 @@ int main(void) {
     printf("=== test_index ===");
 
     test_cmp_versions();
-    test_repman_parse_index();
+    tess_repman_parse_json();
     test_get_pkg();
     test_repman_get_pkg_url();
     test_repman_update_index();

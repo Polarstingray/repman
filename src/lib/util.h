@@ -13,11 +13,11 @@
  * ───────────────────────────────────────────── */
 
 /* ── Error / logging helpers ─────────────────────────────────────────────── */
-#define REPMAN_LOG_INFO(fmt, ...) \
-    fprintf(stderr, "[repman] " fmt "\n", ##__VA_ARGS__)
+#define REPMAN_LOG_INFO(...) \
+    fprintf(stderr, "[repman] " __VA_ARGS__)
 
-#define REPMAN_LOG_ERR(fmt, ...) \
-    fprintf(stderr, "[repman][ERROR] " fmt "\n", ##__VA_ARGS__)
+#define REPMAN_LOG_ERR(...) \
+    fprintf(stderr, "[repman][ERROR] " __VA_ARGS__)
 
 /* ── API: repman_* functions ─────────────────────────────────────────────── */
 

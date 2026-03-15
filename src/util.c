@@ -1,4 +1,4 @@
-
+#define _POSIX_C_SOURCE 200809L
 
 #include "lib/util.h"
 
@@ -26,7 +26,7 @@ char *repman_str_dup(const char *src) {
     size_t len = strlen(src);
     char *copy = malloc(len + 1);   /* malloc returns void*, C auto-casts it */
     if (copy == NULL) {
-        REPMAN_LOG_ERR("repman_strdup: malloc failed");
+        REPMAN_LOG_ERR("repman_strdup: malloc failed\n");
         return NULL;
     }
 
@@ -62,7 +62,7 @@ char *repman_str_repl(char *s, const char *s1, const char *s2) {
     char *ns = realloc(s, new_total);
     if (ns == NULL) {
         // Allocation failed; leave original unmodified
-        REPMAN_LOG_ERR("repman_str_repl: realloc failed");
+        REPMAN_LOG_ERR("repman_str_repl: realloc failed\n");
         return s;
     }
 
@@ -89,7 +89,7 @@ char *repman_path_join(const char *base, const char *name) {
 
     char *result = malloc(total);
     if (result == NULL) {
-        REPMAN_LOG_ERR("repman_path_join: malloc failed");
+        REPMAN_LOG_ERR("repman_path_join: malloc failed\n");
         return NULL;
     }
 
@@ -225,6 +225,8 @@ int repman_file_exists(const char *path) {
     return (stat(path, &st) == 0 && S_ISREG(st.st_mode)) ? 1 : 0;
 }
 
+// Check if a directory exists.
+// returns 1 if the directory exists, 0 otherwise.  */
 int repman_dir_exists(const char *path) {
     if (path == NULL) return 0;
 
@@ -348,6 +350,9 @@ int repman_download(const char *url, const char *dest_path) {
     if (res != CURLE_OK) {
         fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
     } else {
+        // check if file contents are Not Found
+        
+
         printf("downloaded successfully: %s\n", outfilename);
     }
 

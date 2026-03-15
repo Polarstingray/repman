@@ -5,6 +5,8 @@ index.json*
 *.pyo
 *.swp
 *.o
-build/
-tmp/
-sig/
+build/*
+tmp/*
+sig/*
+repman.zip
+index/*

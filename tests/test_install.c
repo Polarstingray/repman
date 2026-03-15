@@ -9,9 +9,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #include "../src/lib/util.h"
-#include "../src/lib/install.h"  // Assuming we add declarations
+#include "../src/lib/install.h"
 
 /* ── Tiny test harness ───────────────────────────────────────────────────── */
 
@@ -54,7 +55,7 @@ static void test_repman_resolve_download(void) {
     char *url = repman_resolve_download("https://github.com/user/repo/releases/tag/v1.0.0", "pkg-v1.0.0", "linux", "amd64", ".tar.gz");
     CHECK(url != NULL);
     if (url) {
-        CHECK(strstr(url, "https://github.com/user/repo/releases/download/pkg_v1.0.0_linux_amd64.tar.gz") == url);
+        CHECK(strstr(url, "https://github.com/user/repo/releases/download/v1.0.0/pkg_v1.0.0_linux_amd64.tar.gz") == url);
         free(url);
     }
 }

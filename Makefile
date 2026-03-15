@@ -31,7 +31,7 @@ TEST_DIR  = tests
 #   patsubst src/%.c, build/%.o, <list>  →  replaces src/X.c with build/X.o
 
 SRCS    = $(wildcard $(SRC_DIR)/*.c)
-TEST_SRCS = $(filter-out $(SRC_DIR)/install.c, $(SRCS))
+TEST_SRCS = $(SRCS)
 OBJS    = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
 
 # ── Output ───────────────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ test: $(TEST_FILES) $(TEST_SRCS) | $(BUILD_DIR)
 	@for t in $(TEST_FILES); do \
 	    name=$$(basename $$t .c); \
 	    echo "Building test: $$name"; \
-	    $(CC) $(CFLAGS) $(TEST_SRCS) $$t -o $(BUILD_DIR)/$$name -lcurl -lcjson; \
+	    $(CC) $(CFLAGS) -DTESTING $(TEST_SRCS) $$t -o $(BUILD_DIR)/$$name -lcurl -lcjson; \
 	    echo "Running test: $$name"; \
 	    $(BUILD_DIR)/$$name; \
 	done
