@@ -16,9 +16,9 @@ cJSON *repman_parse_json(const char *filepath);
 int    cmp_versions(const char *a, const char *b);
 char  *get_version(const char *index_path, const char* name, const char* version, const char* os, const char* arch);
 cJSON *get_pkg(cJSON *pkg, const char* version, const char* os, const char* arch);
-char*  repman_get_pkg_url(cJSON *target);
+char*  repman_get_pkg_url(const char *index_path, const char* name, const char* version, const char* os, const char* arch);
 
-int    repman_update_installed(const char* installed_filepath, const char *name, const char *version, const char *option);
+int    repman_update_installed(const char* installed_path, const char *name, const char *version, const char *option);
 char*  repman_get_installed_version(const char * filepath, const char *name);
 int    repman_is_pkg_behind(const char* isntalled_path, const char* index_path, const char *name, const char* os, const char* arch);
 

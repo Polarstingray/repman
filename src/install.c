@@ -388,10 +388,8 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
         rc = -1;
         goto cleanup;
     }
-
     printf("Package installed successfully.\n");
     
-
 cleanup:
     free(ver);
     free(local_path);
@@ -427,51 +425,42 @@ int main() {
 
     repman_ensure_dirs();
 
-    // char* pkg_and_ver = "test-v1.2.10";
-    char* pkg_name = "affirm";
-    char* pkg_ver = "1.0.0";
+    char* pkg_name = "test";
     char* os = "ubuntu";
     char* arch = "amd64";
+    char* pkg_ver = repman_get_installed_version(INSTALL_JSON, pkg_name);
+    if (pkg_ver == NULL) {
+        pkg_ver = repman_str_dup("0.0.0");
+        printf("Not installed\n");
+    } else {
+        printf("installed version: %s\n", pkg_ver);
+    }
 
     char *index_path = repman_full_path("index", "index.json");
-    cJSON *index = repman_parse_json(index_path);
-    if (index == NULL) {
-        fprintf(stderr, "Failed to parse index\n");
-        return -1;
-    }
-    
+
     char *resolved_version = get_version(index_path, pkg_name, pkg_ver, os, arch);
-    free(index_path);
     if (resolved_version == NULL) {
         fprintf(stderr, "Failed to determine version for package: %s\n", pkg_name);
-        cJSON_Delete(index);
+        free(index_path); free(pkg_ver); free(resolved_version);
         return -1;
     }
 
     char pkg_and_ver[32];
     sprintf(pkg_and_ver, "%s-v%s", pkg_name, resolved_version);
 
-    cJSON *pkg = cJSON_GetObjectItemCaseSensitive(index, pkg_name);
-    cJSON *target = get_pkg(pkg, resolved_version, os, arch);
-    if (target == NULL) {
-        fprintf(stderr, "Failed to find package target %s/%s for version %s\n", os, arch, resolved_version);
-        free(resolved_version);
-        cJSON_Delete(index);
-        return -1;
-    }
-
-    char *pkg_url = repman_get_pkg_url(target);
-    free(resolved_version);
+    char *pkg_url = repman_get_pkg_url(index_path, pkg_name, resolved_version, os, arch);
+    free(resolved_version); resolved_version = NULL;
     if (pkg_url == NULL) {
         fprintf(stderr, "Failed to get package URL\n");
-        cJSON_Delete(index);
+        free(index_path); free(pkg_ver); 
         return -1;
     }
 
     int rc = repman_download_and_install_pkg(pkg_url, pkg_and_ver, os, arch);
 
     free(pkg_url);
-    cJSON_Delete(index);
+    free(pkg_ver);
+    free(index_path);
 
     return rc;
 }

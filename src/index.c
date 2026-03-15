@@ -80,7 +80,7 @@ char *get_version(const char *index_path, const char* name, const char* version,
 
     cJSON *pkg = cJSON_GetObjectItemCaseSensitive(index, name);
     if (pkg == NULL) {
-        fprintf(stderr, "Package not found: %s\n", name);
+        fprintf(stderr, "Package not found: %s_v%s\n", name, version);
         return NULL;
     }
 
@@ -164,13 +164,35 @@ cJSON *get_pkg(cJSON *pkg, const char* version, const char* os, const char* arch
     return cJSON_GetObjectItemCaseSensitive(targets, os_arch);
 }
 
-char* repman_get_pkg_url(cJSON *target)  {
+char* repman_get_pkg_url(const char *index_path, const char *name, const char* version, const char* os, const char* arch)  {
+    if (index == NULL || name == NULL || version == NULL || os == NULL || arch == NULL) return NULL;
+    cJSON *index = repman_parse_json(index_path);
+    if (index == NULL) {
+        fprintf(stderr, "Failed to parse index\n");
+        return NULL;
+    }
+    cJSON *pkg = cJSON_GetObjectItemCaseSensitive(index, name);
+    if (pkg == NULL) {
+        fprintf(stderr, "Package not found in index: %s\n", name);
+        cJSON_Delete(index);
+        return NULL;
+    }
+    cJSON *target = get_pkg(pkg, version, os, arch);
+    if (target == NULL) {
+        fprintf(stderr, "Failed to find package target %s/%s for version %s\n", os, arch, version);
+        cJSON_Delete(index);
+        return NULL;
+    }
+
     cJSON *url = cJSON_GetObjectItemCaseSensitive(target, "url");
     if (url == NULL) {
         fprintf(stderr, "No URL found for target\n");
+        cJSON_Delete(index);
         return NULL;
     }
-    return repman_str_dup(url->valuestring);
+    char *url_str = repman_str_dup(url->valuestring);
+    cJSON_Delete(index);
+    return url_str;
 }
 
 
@@ -281,19 +303,19 @@ cleanup:
     return rc;
 }
 
-int repman_update_installed(const char* installed_filepath, const char *name, const char *version, const char *option) {
+int repman_update_installed(const char* installed_path, const char *name, const char *version, const char *option) {
     
-    if (installed_filepath == NULL || name == NULL || version == NULL || option == NULL) return -1;
+    if (installed_path == NULL || name == NULL || version == NULL || option == NULL) return -1;
 
-    cJSON *installed = repman_parse_json(installed_filepath);
+    cJSON *installed = repman_parse_json(installed_path);
     if (installed == NULL) {
-        fprintf(stderr, "Failed to parse installed file: %s\n", installed_filepath);
+        fprintf(stderr, "Failed to parse installed file: %s\n", installed_path);
         return -1;
     }
     cJSON *pkg = cJSON_GetObjectItemCaseSensitive(installed, name);
     if ( pkg != NULL ) {
         if (!strcmp(pkg->valuestring, version)) {
-            fprintf(stderr, "Already installed: %s\n", name);
+            fprintf(stderr, "Already marked as installed: %s\n", name);
             return 1;
         } else {
             printf("updating %s from version: %s to %s\n", name, pkg->valuestring, version);
@@ -303,8 +325,8 @@ int repman_update_installed(const char* installed_filepath, const char *name, co
         cJSON_AddStringToObject(installed, name, version);
     }
     char *installed_str = cJSON_Print(installed);
-    if (repman_write_file(installed_filepath, installed_str, strlen(installed_str)) != 0) {
-        fprintf(stderr, "Failed to write installed file: %s\n", installed_filepath);
+    if (repman_write_file(installed_path, installed_str, strlen(installed_str)) != 0) {
+        fprintf(stderr, "Failed to write installed file: %s\n", installed_path);
         free(installed_str); cJSON_Delete(installed);
         return -1;
     }
@@ -321,14 +343,14 @@ char* repman_get_installed_version(const char *filepath, const char *name) {
         return NULL;
     }
     if (cJSON_GetObjectItemCaseSensitive(installed, name) == NULL) {
-        fprintf(stderr, "Package not found: %s\n", name);
+        fprintf(stderr, "Package not marked installed: %s\n", name);
         return NULL;
     }
     char* installed_version = repman_str_dup(cJSON_GetObjectItemCaseSensitive(installed, name)->valuestring);
     return installed_version;
 }
 
-int repman_is_pkg_behind(const char *installed_path, const char *Index_path, const char *name, const char *os, const char *arch) {
+int repman_is_pkg_behind(const char *installed_path, const char *index_path, const char *name, const char *os, const char *arch) {
     char* installed_version = repman_get_installed_version(installed_path, name);
     if (installed_version == NULL) {
         fprintf(stderr, "Failed to get installed version for %s\n", name);
@@ -348,7 +370,7 @@ int repman_is_pkg_behind(const char *installed_path, const char *Index_path, con
     } else if (cmp == 0) {
         rc = 0;
     } else {
-        rc = -1 // version is ahead?
+        rc = -1; // version is ahead?
     }
     free(installed_version);
     free(latest_version);
