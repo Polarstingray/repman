@@ -31,6 +31,7 @@ TEST_DIR  = tests
 #   patsubst src/%.c, build/%.o, <list>  →  replaces src/X.c with build/X.o
 
 SRCS    = $(wildcard $(SRC_DIR)/*.c)
+TEST_SRCS = $(SRCS)
 OBJS    = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(SRCS))
 
 # ── Output ───────────────────────────────────────────────────────────────────
@@ -65,14 +66,14 @@ $(BUILD_DIR):
 # Each test file in tests/ is compiled against the same sources.
 # Run with:  make test
 
-TEST_SRCS = $(wildcard $(TEST_DIR)/*.c)
+TEST_FILES = $(wildcard $(TEST_DIR)/*.c)
 
 .PHONY: test
-test: $(TEST_SRCS) $(SRCS) | $(BUILD_DIR)
-	@for t in $(TEST_SRCS); do \
+test: $(TEST_FILES) $(TEST_SRCS) | $(BUILD_DIR)
+	@for t in $(TEST_FILES); do \
 	    name=$$(basename $$t .c); \
 	    echo "Building test: $$name"; \
-	    $(CC) $(CFLAGS) $(SRCS) $$t -o $(BUILD_DIR)/$$name -lcurl; \
+	    $(CC) $(CFLAGS) -DTESTING $(TEST_SRCS) $$t -o $(BUILD_DIR)/$$name -lcurl -lcjson; \
 	    echo "Running test: $$name"; \
 	    $(BUILD_DIR)/$$name; \
 	done

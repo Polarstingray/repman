@@ -1,13 +1,4 @@
-/*
- * repman/src/util.c
- *
- * If you're new to C, this file is a good place to start reading.
- * Pay attention to three things as you go:
- *
- *   1. Every malloc() must have a matching free() somewhere.
- *   2. We always check return values — C won't throw exceptions for you.
- *   3. String lengths matter; we use snprintf/strncat instead of sprintf/strcat.
- */
+#define _POSIX_C_SOURCE 200809L
 
 #include "lib/util.h"
 
@@ -35,12 +26,54 @@ char *repman_str_dup(const char *src) {
     size_t len = strlen(src);
     char *copy = malloc(len + 1);   /* malloc returns void*, C auto-casts it */
     if (copy == NULL) {
-        REPMAN_LOG_ERR("repman_strdup: malloc failed");
+        REPMAN_LOG_ERR("repman_strdup: malloc failed\n");
         return NULL;
     }
 
     memcpy(copy, src, len + 1);     /* copies the NUL byte too */
     return copy;
+}
+
+/*
+* repman_str_repl: replace 1st occurrence of substring with another.
+*/
+char *repman_str_repl(char *s, const char *s1, const char *s2) {
+    if (s == NULL || s1 == NULL || s2 == NULL) return s;
+
+    char *p = strstr(s, s1); // Find the first occurrence of s1
+    if (p == NULL) return s; // nothing to replace
+
+    size_t len1 = strlen(s1);
+    size_t len2 = strlen(s2);
+
+    if (len1 == len2) {
+        memcpy(p, s2, len2);
+        return s;
+    }
+
+    // We may need to grow or shrink the buffer. Compute new total length.
+    size_t orig_len = strlen(s);
+    size_t tail_len = strlen(p + len1); // part after s1
+    size_t new_total = orig_len - len1 + len2 + 1; // +1 for NUL
+
+    // Preserve offset before reallocation
+    size_t off = (size_t)(p - s);
+
+    char *ns = realloc(s, new_total);
+    if (ns == NULL) {
+        // Allocation failed; leave original unmodified
+        REPMAN_LOG_ERR("repman_str_repl: realloc failed\n");
+        return s;
+    }
+
+    // Recompute 'p' in case realloc moved the buffer
+    p = ns + off;
+
+    // Shift tail to make room (or close the gap) and insert replacement
+    memmove(p + len2, p + len1, tail_len + 1); // +1 to move the NUL
+    memcpy(p, s2, len2);
+
+    return ns;
 }
 
 
@@ -56,7 +89,7 @@ char *repman_path_join(const char *base, const char *name) {
 
     char *result = malloc(total);
     if (result == NULL) {
-        REPMAN_LOG_ERR("repman_path_join: malloc failed");
+        REPMAN_LOG_ERR("repman_path_join: malloc failed\n");
         return NULL;
     }
 
@@ -72,8 +105,6 @@ char *repman_path_join(const char *base, const char *name) {
 
     return result;
 }
-
-
 
 
 int repman_str_ends_with(const char *str, const char *suffix) {
@@ -194,6 +225,15 @@ int repman_file_exists(const char *path) {
     return (stat(path, &st) == 0 && S_ISREG(st.st_mode)) ? 1 : 0;
 }
 
+// Check if a directory exists.
+// returns 1 if the directory exists, 0 otherwise.  */
+int repman_dir_exists(const char *path) {
+    if (path == NULL) return 0;
+
+    struct stat st;
+    return (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) ? 1 : 0;
+}
+
 
 int repman_mkdir_p(const char *path) {
     if (path == NULL) return -1;
@@ -279,37 +319,47 @@ int repman_rm(const char* path) {
 }
 
 int repman_download(const char *url, const char *dest_path) {
-    CURL *curl_handle;
-    CURLcode res;
-    FILE *file;
+    CURL *curl_handle = NULL;
+    CURLcode res = CURLE_OK;
+    FILE *file = NULL;
     const char *outfilename = dest_path;
 
     curl_global_init(CURL_GLOBAL_ALL);
     curl_handle = curl_easy_init();
 
-    if (curl_handle) {
-        file = fopen(outfilename, "wb");
-        if (!file) {
-            fprintf(stderr, "Could not open file for writing: %s\n", outfilename);
-            return -1;
-        }
-
-
-        curl_easy_setopt(curl_handle, CURLOPT_URL, url);
-        curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, NULL); // Use default write function
-        curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, file); // Write data to
-        res = curl_easy_perform(curl_handle);
-
-        if (res != CURLE_OK) {
-            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-        } else {
-            printf("Index downloaded successfully: %s\n", outfilename);
-        }
+    if (!curl_handle) {
+        fprintf(stderr, "curl_easy_init() failed\n");
+        curl_global_cleanup();
+        return -1;
     }
+
+    file = fopen(outfilename, "wb");
+    if (!file) {
+        fprintf(stderr, "Could not open file for writing: %s\n", outfilename);
+        curl_easy_cleanup(curl_handle);
+        curl_global_cleanup();
+        return -1;
+    }
+
+    curl_easy_setopt(curl_handle, CURLOPT_URL, url);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, NULL); // Use default write function
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, file); // Write data to
+    curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L); // Follow redirects
+
+    res = curl_easy_perform(curl_handle);
+    if (res != CURLE_OK) {
+        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+    } else {
+        // check if file contents are Not Found
+        
+
+        printf("downloaded successfully: %s\n", outfilename);
+    }
+
     curl_easy_cleanup(curl_handle);
-    fclose(file);
+    if (file) fclose(file);
     curl_global_cleanup();
-    return 0;
+    return (res == CURLE_OK) ? 0 : -1;
 }
 
 char *repman_get_data_dir(void) {
@@ -327,17 +377,33 @@ char *repman_get_data_dir(void) {
     return base;
 }
 
+char *repman_get_local_path(void) {
+    const char *xdg = getenv("XDG_DATA_HOME");
+    char *local;
+    if (xdg != NULL && xdg[0] != '\0') {
+        local = repman_path_join(xdg, "repman");
+    } else {
+        const char *home = getenv("HOME");
+        if (home == NULL) {
+            home = getpwuid(getuid())->pw_dir;
+        }
+        local = repman_path_join(home, ".local");
+    }
+    return local;
+}
+
 void repman_ensure_dirs(void) {
     char *base  = repman_get_data_dir();
     char *index = repman_path_join(base, "index");
     char *sig   = repman_path_join(base, "sig/index");
     char *tmp   = repman_path_join(base, "tmp");
     char *cache = repman_path_join(base, "cache");
+    char *packages = repman_path_join(base, "packages");
 
     repman_mkdir_p(index);
     repman_mkdir_p(sig);
     repman_mkdir_p(tmp);
     repman_mkdir_p(cache);
-
-    free(base); free(index); free(sig); free(tmp); free(cache);
+    repman_mkdir_p(packages);
+    free(base); free(index); free(sig); free(tmp); free(cache); free(packages);
 }

@@ -68,7 +68,7 @@ int repman_verify_sha256(const char *filepath, const char *sha256_path) {
         perror("Failed to read from child process");
         return -1;
     }
-    buffer[count] = '\0';  // Null-terminate the output
+    buffer[count] = '\0';  // null-terminate the output
     char actual_checksum[65]; 
     if (parse_sha256(buffer, actual_checksum) != 0) {
         return -1;

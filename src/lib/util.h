@@ -13,27 +13,30 @@
  * ───────────────────────────────────────────── */
 
 /* ── Error / logging helpers ─────────────────────────────────────────────── */
-#define REPMAN_LOG_INFO(fmt, ...) \
-    fprintf(stderr, "[repman] " fmt "\n", ##__VA_ARGS__)
+#define REPMAN_LOG_INFO(...) \
+    fprintf(stderr, "[repman] " __VA_ARGS__)
 
-#define REPMAN_LOG_ERR(fmt, ...) \
-    fprintf(stderr, "[repman][ERROR] " fmt "\n", ##__VA_ARGS__)
+#define REPMAN_LOG_ERR(...) \
+    fprintf(stderr, "[repman][ERROR] " __VA_ARGS__)
 
 /* ── API: repman_* functions ─────────────────────────────────────────────── */
 
 /* String helpers */
 char *repman_str_dup(const char *src);
 char *repman_path_join(const char *base, const char *name);
+char *repman_str_repl(char *s, const char *s1, const char *s2);
 int   repman_str_ends_with(const char *str, const char *suffix);
 
 /* File helpers */
 char *repman_read_file(const char *path, size_t *out_len);
 int   repman_write_file(const char *path, const char *data, size_t len);
 int   repman_file_exists(const char *path);
+int   repman_dir_exists(const char *path);
 int   repman_mkdir_p(const char *path);
 int   repman_rm(const char *path);   /* recursive remove: files or directories */
 char *repman_get_data_dir(void);
-void repman_ensure_dirs(void);
+char *repman_get_local_path(void);
+void  repman_ensure_dirs(void);
 
 
 /* Network helpers */
