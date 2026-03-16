@@ -429,7 +429,6 @@ cleanup:
 }
 
 int repman_install_latest(const char* name, const char* os, const char* arch) {
-    // remove hardcoded INSTALL_JSON
     char *installed_json = repman_full_path("index", "installed.json");
     char* curr_pkg_ver = repman_get_installed_version(INSTALL_JSON, name);
 
@@ -452,6 +451,7 @@ int repman_install_latest(const char* name, const char* os, const char* arch) {
         return -1;
     }
     
+    // to-do
     // pkg_url & pkg_and_ver should be obtained in download_and_install_pkg()
     sprintf(pkg_and_ver, "%s-v%s", name, resolved_version);
     char *pkg_url = repman_get_pkg_url(index_path, name, resolved_version, os, arch);
@@ -472,18 +472,18 @@ int repman_install_latest(const char* name, const char* os, const char* arch) {
 }
 
 
-#ifndef TESTING
-int main() {
+// #ifndef TESTING
+// int main() {
 
-    repman_ensure_dirs();
+//     repman_ensure_dirs();
 
-    char* pkg_name = "affirm";
-    char* os = "ubuntu";
-    char* arch = "amd64";
+//     char* pkg_name = "affirm";
+//     char* os = "ubuntu";
+//     char* arch = "amd64";
 
-    int rc = repman_install_latest(pkg_name, os, arch);
-}
-#endif
+//     int rc = repman_install_latest(pkg_name, os, arch);
+// }
+// #endif
 
 // https://github.com/Polarstingray/packages/releases/download/test-v1.1.10/test_v1.2.10_ubuntu_amd64.tar.gz
 // 

@@ -70,7 +70,7 @@ int cmp_versions(const char *a, const char *b) {
 }
 
 char *get_version(const char *index_path, const char* name, const char* version, const char* os, const char* arch) {
-    if (index == NULL || name == NULL || os == NULL || arch == NULL) return NULL;
+    if (index_path == NULL || name == NULL || os == NULL || arch == NULL) return NULL;
 
     cJSON *index = repman_parse_json(index_path);
     if (index == NULL) {
@@ -165,7 +165,7 @@ cJSON *get_pkg(cJSON *pkg, const char* version, const char* os, const char* arch
 }
 
 char* repman_get_pkg_url(const char *index_path, const char *name, const char* version, const char* os, const char* arch)  {
-    if (index == NULL || name == NULL || version == NULL || os == NULL || arch == NULL) return NULL;
+    if (index_path == NULL || name == NULL || version == NULL || os == NULL || arch == NULL) return NULL;
     cJSON *index = repman_parse_json(index_path);
     if (index == NULL) {
         fprintf(stderr, "Failed to parse index\n");

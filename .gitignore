@@ -10,3 +10,6 @@ tmp/*
 sig/*
 repman.zip
 index/*
+
+venv/*
+*venv*
