@@ -26,16 +26,17 @@ def install(args: argparse.Namespace) -> int:
     if (not version) :
         print(f"Failed to resolve version for {args.name}")
         return -1
+    pkg_n_ver = f"{args.name}_v{version} is up to date."
     if (installed_version == version) :
-        print(f"{args.name}_v{version} is up to date.")
+        print(f"{pkg_n_ver} is up to date.")
         return 1
     
-    print(f"{args.name}_v{version}")
+    # print(f"{args.name}_v{version}")
     url = repman.get_pkg_url(INDEX_PATH, args.name, version, OS, ARCH)
     if (not url) :
-        print(f"Failed to resolve download url for {args.name}")
+        print(f"Failed to resolve download url for {pkg_n_ver}")
     
-    return install(url, args.name, version, OS, ARCH)
+    return install(url, pkg_n_ver, version, OS, ARCH)
 
 
 def build_parser() -> argparse.ArgumentParser:
