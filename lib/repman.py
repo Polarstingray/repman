@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python3
 
 import ctypes
 import json
@@ -114,10 +114,10 @@ def get_data_dir():
     _libc.free(ptr)
     return result
 
-def install(pkg_url, pkg_and_ver, os_name, arch) -> int:
+def install(name, version, os_name, arch) -> int:
     return _lib.repman_download_and_install_pkg(
-        pkg_url.encode(),
-        pkg_and_ver.encode(),
+        name.encode(),
+        version.encode(),
         os_name.encode(),
         arch.encode(),
     )

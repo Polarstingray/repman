@@ -273,7 +273,21 @@ static int symlink_pkg_files(const char *new_installed_path, const char *local_p
     return 0;
 }
 
-int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, const char *os, const char *arch) {
+int repman_download_and_install_pkg(const char *name, const char *version, const char *os, const char *arch) {
+
+    char* index_dir = repman_full_path("index", "");
+    char* installed = repman_path_join(index_dir, "installed.json");
+    char* index_path = repman_path_join(index_dir, "index.json");
+
+    char *url = repman_get_pkg_url(index_path, name, version, os, arch);
+    char* pkg_and_ver = malloc(strlen(name) + strlen(version) + 3);
+    if (pkg_and_ver == NULL) {
+        free(index_path); free(installed); free(url); free(index_dir);
+        printf("Failed to malloc pkg_and_ver\n");
+        return -1;
+    }
+    snprintf(pkg_and_ver, strlen(name) + strlen(version) + 3, "%s-v%s", name, version);
+
     int rc = 0;
     char* pkg_url = repman_resolve_download(url, pkg_and_ver, os, arch, ".tar.gz");
     char* sig_url = repman_resolve_download(url, pkg_and_ver, os, arch, ".tar.gz.minisig");
@@ -301,8 +315,6 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
     char* sig_path = NULL;
     char* sha256_path = NULL;
 
-    char* index_dir = repman_full_path("index", "");
-    char* installed = repman_path_join(index_dir, "installed.json");
 
     size_t ver_need = (strlen(pkg_ver) - strlen(app_name) - strlen("_v") + 1);
     char *ver = malloc(ver_need);
@@ -397,7 +409,7 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
         goto cleanup;
     }
 
-    int installed_rc = repman_update_installed(INSTALL_JSON, app_name, ver, "install");
+    int installed_rc = repman_update_installed(installed, app_name, ver, "install");
     if (installed_rc != 0 && installed_rc != 1) {
         fprintf(stderr, "Failed to update installed.json\n");
         rc = -1;
@@ -425,12 +437,13 @@ cleanup:
 
     free(index_dir);
     free(installed);
+    free(index_path);
     return rc;
 }
 
 int repman_install_latest(const char* name, const char* os, const char* arch) {
     char *installed_json = repman_full_path("index", "installed.json");
-    char* curr_pkg_ver = repman_get_installed_version(INSTALL_JSON, name);
+    char* curr_pkg_ver = repman_get_installed_version(installed_json, name);
 
     if (curr_pkg_ver == NULL) {
         curr_pkg_ver = repman_str_dup("0.0.0");
@@ -444,46 +457,50 @@ int repman_install_latest(const char* name, const char* os, const char* arch) {
         return -1;
     }
 
-    char *pkg_and_ver = malloc(strlen(name) + strlen(resolved_version) + 3);
-    if (pkg_and_ver == NULL) {
-        free(index_path); free(curr_pkg_ver); free(resolved_version);
-        printf("Failed to malloc pkg_and_ver\n");
-        return -1;
-    }
+    // char *pkg_and_ver = malloc(strlen(name) + strlen(resolved_version) + 3);
+    // if (pkg_and_ver == NULL) {
+    //     free(index_path); free(curr_pkg_ver); free(resolved_version);
+    //     printf("Failed to malloc pkg_and_ver\n");
+    //     return -1;
+    // }
+
+
     
     // to-do
     // pkg_url & pkg_and_ver should be obtained in download_and_install_pkg()
-    sprintf(pkg_and_ver, "%s-v%s", name, resolved_version);
-    char *pkg_url = repman_get_pkg_url(index_path, name, resolved_version, os, arch);
-    free(resolved_version); resolved_version = NULL;
-    if (pkg_url == NULL) {
-        fprintf(stderr, "Failed to get package URL\n");
-        free(index_path); free(curr_pkg_ver);  free(pkg_and_ver);
-        return -1;
-    }
+    // sprintf(pkg_and_ver, "%s-v%s", name, resolved_version);
+    // char *pkg_url = repman_get_pkg_url(index_path, name, resolved_version, os, arch);
+    // free(resolved_version); resolved_version = NULL;
+    // if (pkg_url == NULL) {
+    //     fprintf(stderr, "Failed to get package URL\n");
+    //     free(index_path); free(curr_pkg_ver);  free(pkg_and_ver);
+    //     return -1;
+    // }
 
-    int rc = repman_download_and_install_pkg(pkg_url, pkg_and_ver, os, arch);
 
-    free(pkg_url);
+
+    int rc = repman_download_and_install_pkg(name, resolved_version, os, arch);
+
+    // free(pkg_url);
     free(curr_pkg_ver);
     free(index_path);
-    free(pkg_and_ver);
+    // free(pkg_and_ver);
     return rc;
 }
 
 
-// #ifndef TESTING
-// int main() {
+#ifndef TESTING
+int main() {
 
-//     repman_ensure_dirs();
+    repman_ensure_dirs();
 
-//     char* pkg_name = "affirm";
-//     char* os = "ubuntu";
-//     char* arch = "amd64";
+    char* pkg_name = "test";
+    char* os = "ubuntu";
+    char* arch = "amd64";
 
-//     int rc = repman_install_latest(pkg_name, os, arch);
-// }
-// #endif
+    int rc = repman_install_latest(pkg_name, os, arch);
+}
+#endif
 
 // https://github.com/Polarstingray/packages/releases/download/test-v1.1.10/test_v1.2.10_ubuntu_amd64.tar.gz
 // 

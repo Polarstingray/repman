@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import repman
 import argparse
@@ -22,21 +24,21 @@ def install(args: argparse.Namespace) -> int:
     if (not installed_version) :
         installed_version = "0.0.0"
     
-    version = repman.get_version(INDEX_PATH, args.name, installed_version, OS, ARCH)
-    if (not version) :
+    resolved_version = repman.get_version(INDEX_PATH, args.name, installed_version, OS, ARCH)
+    if (not resolved_version) :
         print(f"Failed to resolve version for {args.name}")
         return -1
-    pkg_n_ver = f"{args.name}_v{version} is up to date."
-    if (installed_version == version) :
-        print(f"{pkg_n_ver} is up to date.")
-        return 1
-    
+        
+    # if (installed_version == resolved_version) :
+    #     print(f"{args.name} is up to date.")
+    #     return 1
+
     # print(f"{args.name}_v{version}")
-    url = repman.get_pkg_url(INDEX_PATH, args.name, version, OS, ARCH)
-    if (not url) :
-        print(f"Failed to resolve download url for {pkg_n_ver}")
+    # url = repman.get_pkg_url(INDEX_PATH, args.name, resolved_version, OS, ARCH)
+    # if (not url) :
+    #     print(f"Failed to resolve download url for {pkg_n_ver}")
     
-    return install(url, pkg_n_ver, version, OS, ARCH)
+    return repman.install(args.name, resolved_version, OS, ARCH)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -77,7 +79,6 @@ def build_parser() -> argparse.ArgumentParser:
     # sp.set_defaults(func=cmd_config)
 
     return p
-
 
 
 def main() :
