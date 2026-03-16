@@ -315,7 +315,6 @@ int repman_download_and_install_pkg(const char *name, const char *version, const
     char* sig_path = NULL;
     char* sha256_path = NULL;
 
-
     size_t ver_need = (strlen(pkg_ver) - strlen(app_name) - strlen("_v") + 1);
     char *ver = malloc(ver_need);
     memcpy(ver, pkg_ver + (strlen(app_name) + strlen("_v")), ver_need);
@@ -324,7 +323,6 @@ int repman_download_and_install_pkg(const char *name, const char *version, const
     if (repman_dir_exists(new_installed_path) != 0) {
         fprintf(stderr, "Package already exists: %s\n", new_installed_path);
         fprintf(stderr, "Checking installation list\n");
-        // Change, Hardcoding INSTALL_JSON
         int installed_rc = repman_update_installed(installed, app_name, ver, "install");
         if (installed_rc == 0) {
             printf("Added %s v%s to installation list\n", app_name, ver);
@@ -452,32 +450,10 @@ int repman_install_latest(const char* name, const char* os, const char* arch) {
     char *resolved_version = get_version(index_path, name, curr_pkg_ver, os, arch);
 
     if (resolved_version == NULL) {
-        fprintf(stderr, "Failed to determine version for package: %s\n", name);
+        fprintf(stderr, "Package not found: %s\n", name);
         free(index_path); free(curr_pkg_ver); free(resolved_version);
         return -1;
     }
-
-    // char *pkg_and_ver = malloc(strlen(name) + strlen(resolved_version) + 3);
-    // if (pkg_and_ver == NULL) {
-    //     free(index_path); free(curr_pkg_ver); free(resolved_version);
-    //     printf("Failed to malloc pkg_and_ver\n");
-    //     return -1;
-    // }
-
-
-    
-    // to-do
-    // pkg_url & pkg_and_ver should be obtained in download_and_install_pkg()
-    // sprintf(pkg_and_ver, "%s-v%s", name, resolved_version);
-    // char *pkg_url = repman_get_pkg_url(index_path, name, resolved_version, os, arch);
-    // free(resolved_version); resolved_version = NULL;
-    // if (pkg_url == NULL) {
-    //     fprintf(stderr, "Failed to get package URL\n");
-    //     free(index_path); free(curr_pkg_ver);  free(pkg_and_ver);
-    //     return -1;
-    // }
-
-
 
     int rc = repman_download_and_install_pkg(name, resolved_version, os, arch);
 

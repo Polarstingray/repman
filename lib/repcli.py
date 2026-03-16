@@ -3,6 +3,7 @@
 import os
 import repman
 import argparse
+import json
 
 from dotenv import load_dotenv
 
@@ -20,26 +21,39 @@ def update(args: argparse.Namespace) -> int:
     return repman.update_index()
      
 def install(args: argparse.Namespace) -> int:
-    installed_version = repman.get_installed_version(INSTALLED_PATH, args.name)
-    if (not installed_version) :
-        installed_version = "0.0.0"
     
-    resolved_version = repman.get_version(INDEX_PATH, args.name, installed_version, OS, ARCH)
-    if (not resolved_version) :
-        print(f"Failed to resolve version for {args.name}")
-        return -1
+    if (not args.version) :
+        return repman.install_latest(args.name, OS, ARCH)
+
+    # rm the old version from repman/packages/
+    # full uninstall (rm symlinks + update installed.json) is not needed 
+    return repman.install(args.name, args.version, OS, ARCH)
+
+
+def upgrade(args: argparse.Namespace) -> int:
+
+    # get all installed packages
+    try :
+        with open(INSTALLED_PATH, "r") as f:
+            installed = json.load(f)
+
+        cnt = 0
+        for pkg in installed:
+            latest_ver = repman.get_version(INDEX_PATH, pkg, installed[pkg], OS, ARCH)
+            if (latest_ver is not None) and (repman.cmp_versions(latest_ver, latest_ver) > 0) :
+                cnt += 1
+                rc = repman.install_latest(pkg, OS, ARCH)
+                if rc != 0 :
+                    print(f"Failed to install {pkg} version {latest_ver} (latest: {installed[pkg]}")
+                    return rc
+    
+    except Exception as e:
+        print(f"Error reading {INSTALLED_PATH}: {e}")
+        return 1
         
-    # if (installed_version == resolved_version) :
-    #     print(f"{args.name} is up to date.")
-    #     return 1
-
-    # print(f"{args.name}_v{version}")
-    # url = repman.get_pkg_url(INDEX_PATH, args.name, resolved_version, OS, ARCH)
-    # if (not url) :
-    #     print(f"Failed to resolve download url for {pkg_n_ver}")
-    
-    return repman.install(args.name, resolved_version, OS, ARCH)
-
+    if cnt == 0 :
+        print("Everything up-to-date")
+    return 0
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Repman")
@@ -52,12 +66,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     # upgrade (go through installed list, marked out of date, and install new pkgs)
     sp = sub.add_parser("upgrade", help="Install latest pkg for any that are out of date")
-    # sp.set_defaults(func=)
+    sp.set_defaults(func=upgrade)
 
     # install 
     sp = sub.add_parser("install", help="installs latest version")
     sp.add_argument("name", help="Package name")
-    sp.add_argument("-v", "--version", required=False, help="Install a specific version")
+    sp.add_argument("-v", "--version", type=str, required=False, help="Install a specific version")
     sp.set_defaults(func=install)
 
     # get-env
@@ -77,7 +91,6 @@ def build_parser() -> argparse.ArgumentParser:
     # config
     sp = sub.add_parser("config", help="Open config.env in $EDITOR (default nano)")
     # sp.set_defaults(func=cmd_config)
-
     return p
 
 

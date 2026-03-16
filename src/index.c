@@ -80,7 +80,7 @@ char *get_version(const char *index_path, const char* name, const char* version,
 
     cJSON *pkg = cJSON_GetObjectItemCaseSensitive(index, name);
     if (pkg == NULL) {
-        fprintf(stderr, "Package not found: %s_v%s\n", name, version);
+        // fprintf(stderr, "Package not found: %s_v%s\n", name, version);
         return NULL;
     }
 
@@ -342,7 +342,7 @@ char* repman_get_installed_version(const char *filepath, const char *name) {
         return NULL;
     }
     if (cJSON_GetObjectItemCaseSensitive(installed, name) == NULL) {
-        fprintf(stderr, "Package not marked installed: %s\n", name);
+        // fprintf(stderr, "Package not marked installed: %s\n", name);
         return NULL;
     }
     char* installed_version = repman_str_dup(cJSON_GetObjectItemCaseSensitive(installed, name)->valuestring);
