@@ -56,6 +56,7 @@ int repman_verify_sha256(const char *filepath, const char *sha256_path) {
     /* parent process */
     close(fd[1]);
     char buffer[512];
+    // To-do, read in loop and just stop at 64 bytes
     ssize_t count = read(fd[0], buffer, sizeof(buffer) - 1);
     int status;
     waitpid(childpid, &status, 0);

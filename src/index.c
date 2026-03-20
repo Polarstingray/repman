@@ -8,6 +8,7 @@
 #include <string.h>
 #include <cjson/cJSON.h>
 
+// To-do, URLs should come from environment variables, potentially through python
 #define INDEX_URL "https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json"
 #define INDEX_SHA256_URL "https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.sha256"
 #define INDEX_MINISIG_URL "https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.minisig"
