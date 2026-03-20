@@ -11,6 +11,9 @@ DATA_DIR = repman.get_data_dir()
 ENV_FILE = os.path.join(DATA_DIR, "config.env")
 INDEX_PATH = os.path.join(DATA_DIR, "index", "index.json")
 INSTALLED_PATH = os.path.join(DATA_DIR, "index", "installed.json")
+PUBKEY_PATH = os.path.join(DATA_DIR, "sig", "CI.PUB")
+
+PUBKEY_URL = os.getenv("PUBKEY_URL", "https://example.com/pubkey")
 
 OS = "ubuntu"
 ARCH = "amd64"
@@ -40,7 +43,7 @@ def upgrade(args: argparse.Namespace) -> int:
         cnt = 0
         for pkg in installed:
             latest_ver = repman.get_version(INDEX_PATH, pkg, installed[pkg], OS, ARCH)
-            if (latest_ver is not None) and (repman.cmp_versions(latest_ver, latest_ver) > 0) :
+            if (latest_ver is not None) and (repman.cmp_versions(installed[pkg], latest_ver) < 0) :
                 cnt += 1
                 rc = repman.install_latest(pkg, OS, ARCH)
                 if rc != 0 :
@@ -54,6 +57,10 @@ def upgrade(args: argparse.Namespace) -> int:
     if cnt == 0 :
         print("Everything up-to-date")
     return 0
+
+
+def fetch_public_key(args: argparse.Namespace) -> str:
+    return repman.download(PUBKEY_URL, PUBKEY_PATH) # eventually implement atomic rewrite in C
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Repman")
@@ -73,6 +80,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("name", help="Package name")
     sp.add_argument("-v", "--version", type=str, required=False, help="Install a specific version")
     sp.set_defaults(func=install)
+
+    sp = sub.add_parser("fetch-key", help="Fetch public key")
+    sp.set_defaults(func=fetch_public_key)
 
     # get-env
     sp = sub.add_parser("get-env", help="Print key environment values")

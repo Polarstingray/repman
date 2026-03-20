@@ -376,6 +376,13 @@ int repman_is_pkg_behind(const char *installed_path, const char *index_path, con
     return rc;
 }
 
+int repman_update_key() {
+    // implementation here
+
+    
+
+    return 0;
+}
 
 
 

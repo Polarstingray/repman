@@ -11,4 +11,5 @@ char* repman_pkg_name(const char *pkg_and_ver, const char *os, const char *arch,
 int repman_extract_tarball(const char *tarball_path, const char *dest_dir);
 int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, const char *os, const char *arch);
 int repman_install_latest(const char* name, const char* os, const char* arch);
+int repman_uninstall(const char* name, const char* version);
 #endif
