@@ -32,6 +32,10 @@ def install(args: argparse.Namespace) -> int:
     # full uninstall (rm symlinks + update installed.json) is not needed 
     return repman.install(args.name, args.version, OS, ARCH)
 
+def uninstall(args: argparse.Namespace) -> int:
+    if (not args.version) :
+        return repman.uninstall(args.name)
+    return repman.uninstall(args.name, args.version)
 
 def upgrade(args: argparse.Namespace) -> int:
 
@@ -81,17 +85,18 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("-v", "--version", type=str, required=False, help="Install a specific version")
     sp.set_defaults(func=install)
 
+    # uninstall
+    sp = sub.add_parser("uninstall", help="usage: uninstall <name> -> uninstalls a package")
+    sp.add_argument("name", help="Package name")
+    sp.add_argument("-v", "--version", type=str, required=False, help="Uninstall a specific version")
+    sp.set_defaults(func=uninstall)
+
     sp = sub.add_parser("fetch-key", help="Fetch public key")
     sp.set_defaults(func=fetch_public_key)
 
     # get-env
     sp = sub.add_parser("get-env", help="Print key environment values")
     # sp.set_defaults(func=cmd_get_env)
-
-    # uninstall
-    sp = sub.add_parser("uninstall", help="usage: uninstall <pkg_name> -> uninstalls a package")
-    sp.add_argument("name", help="Program name to uninstall")
-    # sp.set_defaults(func=cmd_stage)
 
     # verify index
     sp = sub.add_parser("verify", help="verify the index.json")

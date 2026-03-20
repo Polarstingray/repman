@@ -16,7 +16,7 @@
 #define PACKAGE_URL "https://github.com/Polarstingray/packages/releases/tag/test-v1.2.10"
 #define OS "ubuntu"
 #define ARCH "amd64"
-#define PUBKEY "ci.pub"
+#define PUBKEY "sig/ci.pub"
 #define INSTALL_JSON "index/installed.json"
 
 /*
@@ -131,8 +131,18 @@ static int download_package_files(const char *pkg_url, const char *sig_url, cons
 }
 
 static int verify_package_files(const char *pkg_path, const char *sig_path, const char *sha256_path) {
-    repman_verify_minisig(pkg_path, sig_path, PUBKEY);
-    repman_verify_sha256(pkg_path, sha256_path);
+    char *data_dir = repman_get_data_dir();
+    char *sig_dir = repman_path_join(data_dir, "sig");
+    char *pub_key = repman_path_join(data_dir, PUBKEY);
+    if (repman_verify_minisig(pkg_path, sig_path, pub_key) != 0) {
+        fprintf(stderr, "Failed to verify minisig\n");
+        return -1;
+    }
+    free(data_dir); free(sig_dir); free(pub_key);
+    if (repman_verify_sha256(pkg_path, sha256_path) != 0) {
+        fprintf(stderr, "Failed to verify SHA256\n");
+        return -1;
+    }
     printf("Verification Complete.\n");
     return 0;
 }
@@ -472,7 +482,6 @@ int repman_download_and_install_pkg(const char *name, const char *version, const
         rc = -1;
         goto cleanup;
     }
-    repman_rm(download_dir);
 
     printf("renaming %s -> %s\n", old_installed_path, new_installed_path);
     if (rename(old_installed_path, new_installed_path) != 0) {
@@ -507,6 +516,7 @@ int repman_download_and_install_pkg(const char *name, const char *version, const
     printf("Package installed successfully.\n");
     
 cleanup:
+    repman_rm(download_dir);
     free(ver);
     free(local_path);
     free(bin_dir);
@@ -596,7 +606,7 @@ int repman_uninstall(const char* name, const char* version) {
 
     char *installed_json = repman_full_path("index", "installed.json");
     char* curr_pkg_ver = NULL;
-    if (version == NULL) {
+    if (version == NULL || strcmp(version, "") == 0) {
         curr_pkg_ver = repman_get_installed_version(installed_json, name);
         if (curr_pkg_ver == NULL) {
             fprintf(stderr, "Package not found: %s", name);

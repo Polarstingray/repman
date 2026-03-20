@@ -25,6 +25,10 @@ _lib.repman_download_and_install_pkg.argtypes = [
     ctypes.c_char_p,
 ]
 
+# int repman_uninstall(const char*, const char*)
+_lib.repman_uninstall.restype = ctypes.c_int
+_lib.repman_uninstall.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+
 # char *repman_get_data_dir(void)  — returns a heap pointer
 _lib.repman_get_data_dir.restype = ctypes.c_void_p
 _lib.repman_get_data_dir.argtypes = []
@@ -121,6 +125,9 @@ def install(name, version, os_name, arch) -> int:
         os_name.encode(),
         arch.encode(),
     )
+
+def uninstall(name, version="") -> int:
+    return _lib.repman_uninstall(name.encode(), version.encode())
 
 def ensure_dirs():
     _lib.repman_ensure_dirs()
