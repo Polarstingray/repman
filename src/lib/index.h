@@ -11,6 +11,7 @@
 */
 
 int    repman_update_index(void);
+int    repman_update_key(void);
 char*  repman_full_path(const char *dir_, const char *name);
 cJSON *repman_parse_json(const char *filepath);
 int    cmp_versions(const char *a, const char *b);

@@ -45,7 +45,7 @@ all: $(LIB)
 
 # Link all object files into a shared library (.so)
 $(LIB): $(OBJS) | $(BUILD_DIR)
-	$(CC) -shared -o $@ $^
+	$(CC) -shared -o $@ $^ -lcurl -lcjson
 	@echo "Built $@"
 
 # ── Compile each .c → .o ─────────────────────────────────────────────────────

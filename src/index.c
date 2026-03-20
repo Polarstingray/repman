@@ -8,6 +8,7 @@
 #include <string.h>
 #include <cjson/cJSON.h>
 
+// To-do, URLs should come from environment variables, potentially through python
 #define INDEX_URL "https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json"
 #define INDEX_SHA256_URL "https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.sha256"
 #define INDEX_MINISIG_URL "https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.minisig"
@@ -70,7 +71,7 @@ int cmp_versions(const char *a, const char *b) {
 }
 
 char *get_version(const char *index_path, const char* name, const char* version, const char* os, const char* arch) {
-    if (index == NULL || name == NULL || os == NULL || arch == NULL) return NULL;
+    if (index_path == NULL || name == NULL || os == NULL || arch == NULL) return NULL;
 
     cJSON *index = repman_parse_json(index_path);
     if (index == NULL) {
@@ -80,7 +81,7 @@ char *get_version(const char *index_path, const char* name, const char* version,
 
     cJSON *pkg = cJSON_GetObjectItemCaseSensitive(index, name);
     if (pkg == NULL) {
-        fprintf(stderr, "Package not found: %s_v%s\n", name, version);
+        // fprintf(stderr, "Package not found: %s_v%s\n", name, version);
         return NULL;
     }
 
@@ -165,7 +166,7 @@ cJSON *get_pkg(cJSON *pkg, const char* version, const char* os, const char* arch
 }
 
 char* repman_get_pkg_url(const char *index_path, const char *name, const char* version, const char* os, const char* arch)  {
-    if (index == NULL || name == NULL || version == NULL || os == NULL || arch == NULL) return NULL;
+    if (index_path == NULL || name == NULL || version == NULL || os == NULL || arch == NULL) return NULL;
     cJSON *index = repman_parse_json(index_path);
     if (index == NULL) {
         fprintf(stderr, "Failed to parse index\n");
@@ -310,7 +311,7 @@ int repman_update_installed(const char* installed_path, const char *name, const 
     cJSON *installed = repman_parse_json(installed_path);
     if (installed == NULL) {
         fprintf(stderr, "Failed to parse installed file: %s\n", installed_path);
-        return -1;
+        installed = cJSON_Parse("{}");
     }
     cJSON *pkg = cJSON_GetObjectItemCaseSensitive(installed, name);
     if ( pkg != NULL ) {
@@ -330,7 +331,6 @@ int repman_update_installed(const char* installed_path, const char *name, const 
         free(installed_str); cJSON_Delete(installed);
         return -1;
     }
-    printf("Successfully added %s to installed list\n", name);
     free(installed_str); cJSON_Delete(installed);
     return 0;
 }
@@ -343,7 +343,7 @@ char* repman_get_installed_version(const char *filepath, const char *name) {
         return NULL;
     }
     if (cJSON_GetObjectItemCaseSensitive(installed, name) == NULL) {
-        fprintf(stderr, "Package not marked installed: %s\n", name);
+        // fprintf(stderr, "Package not marked installed: %s\n", name);
         return NULL;
     }
     char* installed_version = repman_str_dup(cJSON_GetObjectItemCaseSensitive(installed, name)->valuestring);
@@ -377,6 +377,13 @@ int repman_is_pkg_behind(const char *installed_path, const char *index_path, con
     return rc;
 }
 
+int repman_update_key() {
+    // implementation here
+
+    
+
+    return 0;
+}
 
 
 

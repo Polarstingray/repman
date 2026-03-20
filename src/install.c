@@ -16,7 +16,7 @@
 #define PACKAGE_URL "https://github.com/Polarstingray/packages/releases/tag/test-v1.2.10"
 #define OS "ubuntu"
 #define ARCH "amd64"
-#define PUBKEY "ci.pub"
+#define PUBKEY "sig/ci.pub"
 #define INSTALL_JSON "index/installed.json"
 
 /*
@@ -131,8 +131,18 @@ static int download_package_files(const char *pkg_url, const char *sig_url, cons
 }
 
 static int verify_package_files(const char *pkg_path, const char *sig_path, const char *sha256_path) {
-    repman_verify_minisig(pkg_path, sig_path, PUBKEY);
-    repman_verify_sha256(pkg_path, sha256_path);
+    char *data_dir = repman_get_data_dir();
+    char *sig_dir = repman_path_join(data_dir, "sig");
+    char *pub_key = repman_path_join(data_dir, PUBKEY);
+    if (repman_verify_minisig(pkg_path, sig_path, pub_key) != 0) {
+        fprintf(stderr, "Failed to verify minisig\n");
+        return -1;
+    }
+    free(data_dir); free(sig_dir); free(pub_key);
+    if (repman_verify_sha256(pkg_path, sha256_path) != 0) {
+        fprintf(stderr, "Failed to verify SHA256\n");
+        return -1;
+    }
     printf("Verification Complete.\n");
     return 0;
 }
@@ -273,7 +283,112 @@ static int symlink_pkg_files(const char *new_installed_path, const char *local_p
     return 0;
 }
 
-int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, const char *os, const char *arch) {
+static int unlink_pkg_files(const char* name, const char* version, const char* type) {
+    if (name == NULL || version == NULL || type == NULL) {
+        fprintf(stderr, "Invalid arguments to unlink_pkg_files\n");
+        return -1;
+    }
+
+    if (strcmp(type, "bin") != 0 && strcmp(type, "lib") != 0) {
+        fprintf(stderr, "Unsupported type in unlink_pkg_files: %s\n", type);
+        return -1;
+    }
+
+    char *data_dir = repman_get_data_dir();
+    char *pkg_dir = repman_path_join(data_dir, "packages");
+    size_t pkg_name_len = strlen(name) + strlen(version) + 4;
+    char *pkg_dirname = malloc(pkg_name_len);
+    if (!pkg_dirname) {
+        free(data_dir);
+        free(pkg_dir);
+        return -1;
+    }
+    snprintf(pkg_dirname, pkg_name_len, "%s_v%s", name, version);
+
+    char *pkg_path = repman_path_join(pkg_dir, pkg_dirname);
+    char *pkg_type_path = repman_path_join(pkg_path, type);
+    char *local_path = repman_get_local_path();
+    char *local_type_path = repman_path_join(local_path, type);
+
+    int rc = 0;
+    if (repman_dir_exists(pkg_type_path) != 0) {
+        // Nothing to remove if this package has no bin/lib directory
+        rc = 0;
+        goto cleanup;
+    }
+
+    DIR *dr = opendir(pkg_type_path);
+    if (dr == NULL) {
+        if (!strcmp(type, "lib")) {
+            // lib may be optional; not an error when absent
+            rc = 0;
+        } else {
+            perror("opendir");
+            fprintf(stderr, "Failed to open package %s directory: %s\n", type, pkg_type_path);
+            rc = -1;
+        }
+        goto cleanup;
+    }
+
+    struct dirent *de;
+    while ((de = readdir(dr)) != NULL) {
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+
+        char *local_file = repman_path_join(local_type_path, de->d_name);
+        if (local_file == NULL) {
+            rc = -1;
+            continue;
+        }
+
+        struct stat st;
+        if (lstat(local_file, &st) != 0) {
+            // file not present; continue to next
+            free(local_file);
+            continue;
+        }
+
+        if (!S_ISLNK(st.st_mode)) {
+            free(local_file);
+            continue;
+        }
+
+        if (unlink(local_file) != 0) {
+            perror("unlink");
+            fprintf(stderr, "Failed to unlink %s\n", local_file);
+            rc = -1;
+        }
+
+        free(local_file);
+    }
+
+    closedir(dr);
+
+cleanup:
+    free(pkg_dirname);
+    free(local_type_path);
+    free(local_path);
+    free(pkg_type_path);
+    free(pkg_path);
+    free(pkg_dir);
+    free(data_dir);
+    return rc;
+}
+
+int repman_download_and_install_pkg(const char *name, const char *version, const char *os, const char *arch) {
+
+    char* index_dir = repman_full_path("index", "");
+    char* installed = repman_path_join(index_dir, "installed.json");
+    char* index_path = repman_path_join(index_dir, "index.json");
+
+    char *url = repman_get_pkg_url(index_path, name, version, os, arch);
+    char* pkg_and_ver = malloc(strlen(name) + strlen(version) + 3);
+    if (pkg_and_ver == NULL) {
+        free(index_path); free(installed); free(url); free(index_dir);
+        printf("Failed to malloc pkg_and_ver\n");
+        return -1;
+    }
+    snprintf(pkg_and_ver, strlen(name) + strlen(version) + 3, "%s-v%s", name, version);
+
     int rc = 0;
     char* pkg_url = repman_resolve_download(url, pkg_and_ver, os, arch, ".tar.gz");
     char* sig_url = repman_resolve_download(url, pkg_and_ver, os, arch, ".tar.gz.minisig");
@@ -308,7 +423,18 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
     // check if new_installed_path is a dir already
     if (repman_dir_exists(new_installed_path) != 0) {
         fprintf(stderr, "Package already exists: %s\n", new_installed_path);
-        rc = -1;
+        fprintf(stderr, "Checking installation list\n");
+        int installed_rc = repman_update_installed(installed, app_name, ver, "install");
+        if (installed_rc == 0) {
+            printf("Added %s v%s to installation list\n", app_name, ver);
+            rc = 1;
+            goto cleanup;
+        } else if (installed_rc != 1) {
+            fprintf(stderr, "Failed to update installed.json\n");
+            rc = -1;
+        } else  {
+            rc = installed_rc;
+        }
         goto cleanup;
     }
 
@@ -356,7 +482,6 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
         rc = -1;
         goto cleanup;
     }
-    repman_rm(download_dir);
 
     printf("renaming %s -> %s\n", old_installed_path, new_installed_path);
     if (rename(old_installed_path, new_installed_path) != 0) {
@@ -382,7 +507,7 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
         goto cleanup;
     }
 
-    int installed_rc = repman_update_installed(INSTALL_JSON, app_name, ver, "install");
+    int installed_rc = repman_update_installed(installed, app_name, ver, "install");
     if (installed_rc != 0 && installed_rc != 1) {
         fprintf(stderr, "Failed to update installed.json\n");
         rc = -1;
@@ -391,6 +516,7 @@ int repman_download_and_install_pkg(const char *url, const char *pkg_and_ver, co
     printf("Package installed successfully.\n");
     
 cleanup:
+    repman_rm(download_dir);
     free(ver);
     free(local_path);
     free(bin_dir);
@@ -407,62 +533,168 @@ cleanup:
     free(pkg_path);
     free(sig_path);
     free(sha256_path);
+
+    free(index_dir);
+    free(installed);
+    free(index_path);
+    return rc;
+}
+
+int repman_install_latest(const char* name, const char* os, const char* arch) {
+    char *installed_json = repman_full_path("index", "installed.json");
+    char* curr_pkg_ver = repman_get_installed_version(installed_json, name);
+
+    if (curr_pkg_ver == NULL) {
+        curr_pkg_ver = repman_str_dup("0.0.0");
+    }
+    char *index_path = repman_full_path("index", "index.json");
+    char *resolved_version = get_version(index_path, name, curr_pkg_ver, os, arch);
+
+    if (resolved_version == NULL) {
+        fprintf(stderr, "Package not found: %s\n", name);
+        free(index_path); free(curr_pkg_ver); free(resolved_version);
+        return -1;
+    }
+
+    int rc = repman_download_and_install_pkg(name, resolved_version, os, arch);
+
+    // free(pkg_url);
+    free(curr_pkg_ver);
+    free(index_path);
+    // free(pkg_and_ver);
     return rc;
 }
 
 
+static int unlink_pkg_data(const char* name) {
+    if (name == NULL) return -1;
+
+    char *local_path = repman_get_local_path();
+    if (!local_path) return -1;
+
+    char *share_dir = repman_path_join(local_path, "share");
+    char *pkg_share = repman_path_join(share_dir, name);
+
+    int rc = 0;
+    struct stat st;
+    if (lstat(pkg_share, &st) == 0) {
+        if (S_ISLNK(st.st_mode) || S_ISREG(st.st_mode)) {
+            if (unlink(pkg_share) != 0) {
+                perror("unlink");
+                fprintf(stderr, "Failed to unlink data path: %s", pkg_share);
+                rc = -1;
+            }
+        } else if (S_ISDIR(st.st_mode)) {
+            if (repman_rm(pkg_share) != 0) {
+                fprintf(stderr, "Failed to remove data directory: %s", pkg_share);
+                rc = -1;
+            }
+        }
+    }
+
+    free(pkg_share);
+    free(share_dir);
+    free(local_path);
+    return rc;
+}
+
+int repman_uninstall(const char* name, const char* version) {
+    if (name == NULL) {
+        fprintf(stderr, "Package name required for uninstall");
+        return -1;
+    }
+
+    char *installed_json = repman_full_path("index", "installed.json");
+    char* curr_pkg_ver = NULL;
+    if (version == NULL || strcmp(version, "") == 0) {
+        curr_pkg_ver = repman_get_installed_version(installed_json, name);
+        if (curr_pkg_ver == NULL) {
+            fprintf(stderr, "Package not found: %s", name);
+            free(installed_json);
+            return -1;
+        }
+    }
+    else {
+        curr_pkg_ver = repman_str_dup(version);
+    }
+
+    int rc = 0;
+    if (unlink_pkg_files(name, curr_pkg_ver, "bin") != 0) {
+        rc = -1;
+    }
+    if (unlink_pkg_files(name, curr_pkg_ver, "lib") != 0) {
+        rc = -1;
+    }
+
+    if (unlink_pkg_data(name) != 0) {
+        rc = -1;
+    }
+
+    char *data_dir = repman_get_data_dir();
+    char *packages_dir = repman_path_join(data_dir, "packages");
+
+    size_t pkg_dirname_len = strlen(name) + strlen(curr_pkg_ver) + 4; // name_vversion + NUL
+    char *pkg_dirname = malloc(pkg_dirname_len);
+    if (!pkg_dirname) {
+        fprintf(stderr, "Failed to allocate package directory name");
+        rc = -1;
+        goto after_pkg_rm;
+    }
+
+    snprintf(pkg_dirname, pkg_dirname_len, "%s_v%s", name, curr_pkg_ver);
+    char *pkg_path = repman_path_join(packages_dir, pkg_dirname);
+
+    if (repman_rm(pkg_path) != 0) {
+        fprintf(stderr, "Failed to remove package directory: %s", pkg_path);
+        rc = -1;
+    }
+
+    free(pkg_path);
+    free(pkg_dirname);
+
+after_pkg_rm:
+    free(packages_dir);
+    free(data_dir);
+
+    cJSON *installed = repman_parse_json(installed_json);
+    if (installed != NULL) {
+        cJSON_DeleteItemFromObject(installed, name);
+        char *installed_str = cJSON_Print(installed);
+        if (installed_str != NULL) {
+            if (repman_write_file(installed_json, installed_str, strlen(installed_str)) != 0) {
+                fprintf(stderr, "Failed to update installed.json");
+                rc = -1;
+            }
+            free(installed_str);
+        } else {
+            fprintf(stderr, "Failed to render installed.json");
+            rc = -1;
+        }
+        cJSON_Delete(installed);
+    } else {
+        fprintf(stderr, "Failed to parse installed.json for uninstall");
+        rc = -1;
+    }
+
+    free(curr_pkg_ver);
+    free(installed_json);
+
+    return rc;
+}
+
 #ifndef TESTING
 int main() {
-    // char *url = repman_resolve_download(PACKAGE_URL, "test_v1.2.10", "ubuntu", "amd64", ".tar.gz");
-    // printf("Download URL: %s\n", url);
-
-    // printf("Downloading...");
-    // char* pkg_name = repman_pkg_name("test-v1.2.10", "ubuntu", "amd64", ".tar.gz");
-    // printf("Package Name: %s\n", pkg_name);
-    // repman_download(url, pkg_name);
-    // printf("Download complete.\n");
-    // free(url); free(pkg_name);
 
     repman_ensure_dirs();
 
-    char* pkg_name = "test";
+    char* pkg_name = "affirm";
     char* os = "ubuntu";
     char* arch = "amd64";
-    char* pkg_ver = repman_get_installed_version(INSTALL_JSON, pkg_name);
-    if (pkg_ver == NULL) {
-        pkg_ver = repman_str_dup("0.0.0");
-        printf("Not installed\n");
-    } else {
-        printf("installed version: %s\n", pkg_ver);
-    }
 
-    char *index_path = repman_full_path("index", "index.json");
+    // int rc = repman_uninstall(pkg_name, "1.0.1");
 
-    char *resolved_version = get_version(index_path, pkg_name, pkg_ver, os, arch);
-    if (resolved_version == NULL) {
-        fprintf(stderr, "Failed to determine version for package: %s\n", pkg_name);
-        free(index_path); free(pkg_ver); free(resolved_version);
-        return -1;
-    }
+    int rc = repman_install_latest(pkg_name, os, arch);
 
-    char pkg_and_ver[32];
-    sprintf(pkg_and_ver, "%s-v%s", pkg_name, resolved_version);
-
-    char *pkg_url = repman_get_pkg_url(index_path, pkg_name, resolved_version, os, arch);
-    free(resolved_version); resolved_version = NULL;
-    if (pkg_url == NULL) {
-        fprintf(stderr, "Failed to get package URL\n");
-        free(index_path); free(pkg_ver); 
-        return -1;
-    }
-
-    int rc = repman_download_and_install_pkg(pkg_url, pkg_and_ver, os, arch);
-
-    free(pkg_url);
-    free(pkg_ver);
-    free(index_path);
-
-    return rc;
 }
 #endif
 
