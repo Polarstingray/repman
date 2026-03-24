@@ -11,16 +11,16 @@ DATA_DIR = repman.get_data_dir()
 ENV_FILE = os.path.join(DATA_DIR, "config.env")
 INDEX_PATH = os.path.join(DATA_DIR, "index", "index.json")
 INSTALLED_PATH = os.path.join(DATA_DIR, "index", "installed.json")
-PUBKEY_PATH = os.path.join(DATA_DIR, "sig", "CI.PUB")
-
-PUBKEY_URL = os.getenv("PUBKEY_URL", "https://example.com/pubkey")
-
-OS = "ubuntu"
-ARCH = "amd64"
+PUBKEY_PATH = os.path.join(DATA_DIR, "sig", "ci.pub")
 
 load_dotenv(ENV_FILE)
+
+OS = os.getenv("OS", "ubuntu")
+ARCH = os.getenv("ARCH", "amd64")
+
+PUBKEY_URL = os.getenv("PUBKEY_URL", "https://example.com/pubkey")
  
-def update(args: argparse.Namespace) -> int:
+def update(_: argparse.Namespace) -> int:
     return repman.update_index()
      
 def install(args: argparse.Namespace) -> int:
@@ -37,7 +37,7 @@ def uninstall(args: argparse.Namespace) -> int:
         return repman.uninstall(args.name)
     return repman.uninstall(args.name, args.version)
 
-def upgrade(args: argparse.Namespace) -> int:
+def upgrade(_: argparse.Namespace) -> int:
 
     # get all installed packages
     try :
@@ -63,11 +63,11 @@ def upgrade(args: argparse.Namespace) -> int:
     return 0
 
 
-def fetch_public_key(args: argparse.Namespace) -> str:
+def fetch_public_key(_: argparse.Namespace) -> str:
     return repman.download(PUBKEY_URL, PUBKEY_PATH) # eventually implement atomic rewrite in C
 
 
-def ensure_dirs(args: argparse.Namespace) -> None:
+def ensure_dirs(_: argparse.Namespace) -> None:
     return repman.ensure_dirs()
 
 def build_parser() -> argparse.ArgumentParser:

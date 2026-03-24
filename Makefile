@@ -113,6 +113,7 @@ install: $(BIN)
 	cp -r sig $(DATADIR)/
 	cp ci.pub $(DATADIR)/sig/
 	cp -r build $(DATADIR)/
+	cp config.env.example $(DATADIR)/config.env
 
 #	create venv
 	python3 -m venv $(DATADIR)/cli/venv
@@ -121,9 +122,9 @@ install: $(BIN)
 		@echo "Failed to create venv" \
 		exit 1; \
 	fi
-	source $(DATADIR)/cli/venv/bin/activate 
-	pip3 install -q python-dotenv
-	deactivate $(DATADIR)/cli/venv/bin/activate
+# 	source $(DATADIR)/cli/venv/bin/activate 
+# 	pip3 install -q python-dotenv
+# 	deactivate $(DATADIR)/cli/venv/bin/activate
 
 #	ensure correct PATH variable
 
