@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# "$HOME/.local/share/repman/
+
+VENV_PATH="$HOME/.local/share/repman/cli/venv"
+PYTHON_CLI="$HOME/.local/share/repman/cli/repcli.py"
+
+if [ -d "$VENV_PATH" ]; then
+    source "$VENV_PATH/bin/activate"
+else
+    echo "No virtual environment found."
+    exit 1
+fi
+
+exec "$PYTHON_CLI" "$@"

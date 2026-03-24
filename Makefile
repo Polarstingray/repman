@@ -24,6 +24,15 @@ SRC_DIR   = src
 BUILD_DIR = build
 TEST_DIR  = tests
 
+
+# ── installation dir ─────────────────────────────────────────────────────────
+PREFIX  = $(HOME)/.local
+BINDIR  = $(PREFIX)/bin
+LIBDIR 	= $(PREFIX)/lib
+DATADIR = $(PREFIX)/share/repman
+
+BIN=repman
+
 # ── Source files ─────────────────────────────────────────────────────────────
 #
 # $(wildcard ...)  expands a glob at make-time
@@ -84,3 +93,40 @@ test: $(TEST_FILES) $(TEST_SRCS) | $(BUILD_DIR)
 clean:
 	rm -rf $(BUILD_DIR)
 	@echo "Cleaned."
+
+
+# –– Install –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
+
+install: $(BIN)
+	mkdir -p $(BINDIR)
+	mkdir -p $(LIBDIR)
+	mkdir -p $(DATADIR)
+	chown -R $(USER):$(USER) $(PREFIX)
+	
+#	copy binaries, lib files, and data
+#	initially, must be a ci.pub key in ./sig/
+#	run ensure_dirs()
+	cp $(BIN) $(BINDIR)/$(BIN)
+	chmod +x $(BINDIR)/$(BIN)
+
+	cp -r cli $(DATADIR)/
+	cp -r sig $(DATADIR)/
+	cp ci.pub $(DATADIR)/sig/
+	cp -r build $(DATADIR)/
+
+#	create venv
+	python3 -m venv $(DATADIR)/cli/venv
+# 	"$(DATADIR)/cli/venv/bin/pip3" install -q python-dotenv
+	@if [ $? -ne 0 ]; then \
+		@echo "Failed to create venv" \
+		exit 1; \
+	fi
+	source $(DATADIR)/cli/venv/bin/activate 
+	pip3 install -q python-dotenv
+	deactivate $(DATADIR)/cli/venv/bin/activate
+
+#	ensure correct PATH variable
+
+#	ensure needed project direcetories
+
+

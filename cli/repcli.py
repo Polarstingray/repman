@@ -66,6 +66,10 @@ def upgrade(args: argparse.Namespace) -> int:
 def fetch_public_key(args: argparse.Namespace) -> str:
     return repman.download(PUBKEY_URL, PUBKEY_PATH) # eventually implement atomic rewrite in C
 
+
+def ensure_dirs(args: argparse.Namespace) -> None:
+    return repman.ensure_dirs()
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Repman")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -97,6 +101,9 @@ def build_parser() -> argparse.ArgumentParser:
     # get-env
     sp = sub.add_parser("get-env", help="Print key environment values")
     # sp.set_defaults(func=cmd_get_env)
+
+    sp = sub.add_parser("ensure-dirs", help="Call once on first download")
+    sp.set_defaults(func=ensure_dirs)
 
     # verify index
     sp = sub.add_parser("verify", help="verify the index.json")
