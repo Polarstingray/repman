@@ -11,7 +11,7 @@ DATA_DIR = repman.get_data_dir()
 ENV_FILE = os.path.join(DATA_DIR, "config.env")
 INDEX_PATH = os.path.join(DATA_DIR, "index", "index.json")
 INSTALLED_PATH = os.path.join(DATA_DIR, "index", "installed.json")
-PUBKEY_PATH = os.path.join(DATA_DIR, "sig", "ci.pub")
+PUBKEY_PATH = os.path.join(DATA_DIR, "sig", "index", "ci.pub")
 
 load_dotenv(ENV_FILE)
 
