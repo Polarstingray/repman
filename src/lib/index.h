@@ -21,6 +21,6 @@ char*  repman_get_pkg_url(const char *index_path, const char* name, const char* 
 
 int    repman_update_installed(const char* installed_path, const char *name, const char *version, const char *option);
 char*  repman_get_installed_version(const char * filepath, const char *name);
-int    repman_is_pkg_behind(const char* isntalled_path, const char* index_path, const char *name, const char* os, const char* arch);
+int    repman_is_pkg_behind(const char* installed_path, const char* index_path, const char *name, const char* os, const char* arch);
 
 #endif

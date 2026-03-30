@@ -87,6 +87,12 @@ test: $(TEST_FILES) $(TEST_SRCS) | $(BUILD_DIR)
 	    $(BUILD_DIR)/$$name; \
 	done
 
+# ── Python CLI tests ──────────────────────────────────────────────────────────
+
+.PHONY: test-cli
+test-cli: $(LIB)
+	python3 $(TEST_DIR)/test_cli.py
+
 # ── Clean ─────────────────────────────────────────────────────────────────────
 
 .PHONY: clean
