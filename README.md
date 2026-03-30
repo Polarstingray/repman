@@ -108,7 +108,7 @@ The `url` field points to the GitHub release *tag* page. repman rewrites it to t
 
 ### 1. Build the shared library
 
-```sh
+```bash
 make
 ```
 
@@ -116,7 +116,7 @@ This produces `build/librepman.so`.
 
 ### 2. Install
 
-```sh
+```bash
 make install
 ```
 
@@ -135,13 +135,13 @@ If `~/.local/bin` is not in your `PATH`, the installer prints the line to add to
 
 If `ci.pub` was not present at install time, fetch the public key:
 
-```sh
+```bash
 repman fetch-key
 ```
 
 Then pull the package index:
 
-```sh
+```bash
 repman update
 ```
 
@@ -190,16 +190,16 @@ repman <command> [options]
 
 ### Examples
 
-```sh
+```bash
 # First-time setup
 repman fetch-key
 repman update
 
 # Install a package
-repman install ripgrep
+repman install affirm
 
 # Install a specific version
-repman install ripgrep -v 14.0.0
+repman install affirm -v 1.0.1
 
 # Check what is installed
 repman list
@@ -208,7 +208,7 @@ repman list
 repman update && repman upgrade
 
 # Remove a package
-repman uninstall ripgrep
+repman uninstall affirm
 ```
 
 ---
@@ -217,7 +217,7 @@ repman uninstall ripgrep
 
 ### Build and run C tests
 
-```sh
+```bash
 make test
 ```
 
@@ -225,23 +225,21 @@ Compiles each `tests/*.c` file against the library sources and runs it.
 
 ### Run CLI integration tests
 
-```sh
+```bash
 make test-cli
 ```
 
-Runs `tests/test_cli.py` (20 tests) via `unittest`. Each test gets an isolated temp directory via `XDG_DATA_HOME` so nothing touches real repman data. Requires `librepman.so` to be built first.
+Runs `tests/test_cli.py` (20 tests) via `unittest`. Each test gets an isolated temp directory via `XDG_DATA_HOME` so nothing touches real repman data. Requires `librepman.so` to be built first (make).
 
 ### Clean
 
-```sh
+```bash
 make clean
 ```
-
 Removes the `build/` directory.
 
 ### Source layout
-
-```
+```bash
 src/
 ├── util.c          # String helpers, file I/O, mkdir_p, rm_rf, curl download
 ├── verify.c        # SHA256 and minisign verification (fork+exec)
@@ -271,3 +269,16 @@ The following features are not yet implemented:
 - **`verify` command** — registered in the parser but has no handler.
 - **`config` command** — registered in the parser but has no handler.
 - **Atomic public key download** — `fetch-key` writes the key directly without an atomic rename.
+
+
+## dependencies for C
+- libcurl
+- minisign
+- cjson
+
+```bash
+# Example installation ubuntu
+sudo apt-get install libcurl4-openssl-dev
+sudo apt install minisign
+sudo apt-get install libcjson-dev
+```
