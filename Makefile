@@ -87,6 +87,12 @@ test: $(TEST_FILES) $(TEST_SRCS) | $(BUILD_DIR)
 	    $(BUILD_DIR)/$$name; \
 	done
 
+# ── Python CLI tests ──────────────────────────────────────────────────────────
+
+.PHONY: test-cli
+test-cli: $(LIB)
+	python3 $(TEST_DIR)/test_cli.py
+
 # ── Clean ─────────────────────────────────────────────────────────────────────
 
 .PHONY: clean
@@ -97,36 +103,59 @@ clean:
 
 # –– Install –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
-install: $(BIN)
+.PHONY: install
+install: $(LIB)
+	@echo "Installing repman to $(PREFIX)..."
+
+	# Create installation directories (mirrors repman_ensure_dirs)
 	mkdir -p $(BINDIR)
-	mkdir -p $(LIBDIR)
-	mkdir -p $(DATADIR)
-	chown -R $(USER):$(USER) $(PREFIX)
-	
-#	copy binaries, lib files, and data
-#	initially, must be a ci.pub key in ./sig/
-#	run ensure_dirs()
-	cp $(BIN) $(BINDIR)/$(BIN)
+	mkdir -p $(DATADIR)/index
+	mkdir -p $(DATADIR)/sig/index
+	mkdir -p $(DATADIR)/packages
+	mkdir -p $(DATADIR)/tmp
+	mkdir -p $(DATADIR)/cache
+	mkdir -p $(DATADIR)/cli
+
+	# Copy the shared library and CLI sources
+	cp -r $(BUILD_DIR) $(DATADIR)/
+	cp -r cli $(DATADIR)/
+
+	# Copy config.env only if it does not already exist (preserve user edits)
+	@if [ ! -f $(DATADIR)/config.env ]; then \
+		cp config.env.example $(DATADIR)/config.env; \
+		echo "Config written to $(DATADIR)/config.env"; \
+	else \
+		echo "Keeping existing $(DATADIR)/config.env"; \
+	fi
+
+	# Copy public key if available locally; otherwise warn
+	@if [ -f sig/ci.pub ]; then \
+		cp sig/ci.pub $(DATADIR)/sig/ci.pub; \
+		echo "Public key installed from sig/ci.pub"; \
+	elif [ -f ci.pub ]; then \
+		cp ci.pub $(DATADIR)/sig/ci.pub; \
+		echo "Public key installed from ci.pub"; \
+	else \
+		echo "WARNING: no ci.pub found — run 'repman fetch-key' after install"; \
+	fi
+
+	# Create venv and install Python dependencies
+	python3 -m venv $(DATADIR)/cli/venv
+	$(DATADIR)/cli/venv/bin/pip3 install -q python-dotenv
+
+	# Write the repman wrapper script
+	@printf '#!/bin/sh\nexec "$(DATADIR)/cli/venv/bin/python3" "$(DATADIR)/cli/repcli.py" "$$@"\n' \
+		> $(BINDIR)/$(BIN)
 	chmod +x $(BINDIR)/$(BIN)
 
-	cp -r cli $(DATADIR)/
-	cp -r sig $(DATADIR)/
-	cp ci.pub $(DATADIR)/sig/
-	cp -r build $(DATADIR)/
-
-#	create venv
-	python3 -m venv $(DATADIR)/cli/venv
-# 	"$(DATADIR)/cli/venv/bin/pip3" install -q python-dotenv
-	@if [ $? -ne 0 ]; then \
-		@echo "Failed to create venv" \
-		exit 1; \
+	# Warn if BINDIR is not in PATH
+	@if ! printf '%s' "$$PATH" | tr ':' '\n' | grep -qx '$(BINDIR)'; then \
+		echo ""; \
+		echo "NOTE: $(BINDIR) is not in PATH."; \
+		echo "Add this line to your shell profile (~/.bashrc, ~/.profile, etc.):"; \
+		echo "  export PATH=\"$(BINDIR):\$$PATH\""; \
 	fi
-	source $(DATADIR)/cli/venv/bin/activate 
-	pip3 install -q python-dotenv
-	deactivate $(DATADIR)/cli/venv/bin/activate
 
-#	ensure correct PATH variable
-
-#	ensure needed project direcetories
-
+	@echo ""
+	@echo "repman installed. Run 'repman --help' to get started."
 

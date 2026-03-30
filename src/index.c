@@ -8,7 +8,6 @@
 #include <string.h>
 #include <cjson/cJSON.h>
 
-// To-do, URLs should come from environment variables, potentially through python
 #define INDEX_URL "https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json"
 #define INDEX_SHA256_URL "https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.sha256"
 #define INDEX_MINISIG_URL "https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.minisig"
@@ -200,10 +199,13 @@ char* repman_get_pkg_url(const char *index_path, const char *name, const char* v
 
 // download, verify, and atomic rewrite
 int repman_update_index(void) {
-    // download the index file
-    char *index_url = INDEX_URL;
-    char *index_sha256_url = INDEX_SHA256_URL;
-    char *index_minisig_url = INDEX_MINISIG_URL;
+    // read URLs from environment, fall back to compiled-in defaults
+    const char *index_url       = getenv("INDEX_URL");
+    const char *index_sha256_url = getenv("INDEX_SHA256_URL");
+    const char *index_minisig_url = getenv("INDEX_MINISIG_URL");
+    if (index_url       == NULL || index_url[0]       == '\0') index_url       = INDEX_URL;
+    if (index_sha256_url == NULL || index_sha256_url[0] == '\0') index_sha256_url = INDEX_SHA256_URL;
+    if (index_minisig_url == NULL || index_minisig_url[0] == '\0') index_minisig_url = INDEX_MINISIG_URL;
 
     // construct paths
     char* data_dir = repman_get_data_dir();
@@ -223,6 +225,7 @@ int repman_update_index(void) {
     // char* sha256_path = repman_full_path(sig_dir, sha256_name);
     char* sha256_path = repman_path_join(sig_dir, sha256_name);
 
+    char *pubkey_path = repman_full_path(SIG_DIR, PUBKEY);
     char *download_dir = repman_path_join(data_dir, DOWNLOAD_DIR);
     char index_tmp_name[32] = INDEX_NAME;
     char sha256_tmp_name[32] = INDEX_NAME;
@@ -265,7 +268,7 @@ int repman_update_index(void) {
     }
     // verify checksums and minisign signature for index.json
     if (repman_verify_sha256(index_tmp_path, index_sha256_tmp_path) != 0 ||
-        repman_verify_minisig(index_tmp_path, index_minisig_tmp_path, PUBKEY) != 0) {
+        repman_verify_minisig(index_tmp_path, index_minisig_tmp_path, pubkey_path) != 0) {
         fprintf(stderr, "Failed to verify checksums or minisign signature for index.json\n");
         rc = -1;
         goto cleanup;
@@ -292,6 +295,7 @@ int repman_update_index(void) {
 
 cleanup:
     repman_rm(download_dir);
+    free(pubkey_path);
     free(download_dir);
     free(ipath);
     free(sha256_path);

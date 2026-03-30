@@ -163,10 +163,15 @@ static int check_extracted_package(const char *old_installed_path, const char *b
 
 
 static int symlink_pkg_data(const char *installed_path, const char *local_path, const char* pkg_name) {
-    char *new_tmp_dir = malloc(strlen(installed_path) + strlen("/share/") + strlen(pkg_name) + strlen("_tmp") + 1);
-    new_tmp_dir = repman_path_join(local_path, "share");
-    new_tmp_dir = repman_path_join(new_tmp_dir, pkg_name);
-    strcat(new_tmp_dir, "_tmp");
+    size_t pkg_tmp_len = strlen(pkg_name) + 4 + 1; /* "_tmp" + NUL */
+    char *pkg_name_tmp = malloc(pkg_tmp_len);
+    if (!pkg_name_tmp) return -1;
+    snprintf(pkg_name_tmp, pkg_tmp_len, "%s_tmp", pkg_name);
+
+    char *share_dir = repman_path_join(local_path, "share");
+    char *new_tmp_dir = repman_path_join(share_dir, pkg_name_tmp);
+    free(share_dir);
+    free(pkg_name_tmp);
     char *installed_data_dir = repman_path_join(installed_path, "data");
 
     struct stat st;
@@ -558,10 +563,9 @@ int repman_install_latest(const char* name, const char* os, const char* arch) {
 
     int rc = repman_download_and_install_pkg(name, resolved_version, os, arch);
 
-    // free(pkg_url);
+    free(resolved_version);
     free(curr_pkg_ver);
     free(index_path);
-    // free(pkg_and_ver);
     return rc;
 }
 

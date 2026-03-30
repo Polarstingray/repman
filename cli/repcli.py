@@ -11,16 +11,16 @@ DATA_DIR = repman.get_data_dir()
 ENV_FILE = os.path.join(DATA_DIR, "config.env")
 INDEX_PATH = os.path.join(DATA_DIR, "index", "index.json")
 INSTALLED_PATH = os.path.join(DATA_DIR, "index", "installed.json")
-PUBKEY_PATH = os.path.join(DATA_DIR, "sig", "CI.PUB")
-
-PUBKEY_URL = os.getenv("PUBKEY_URL", "https://example.com/pubkey")
-
-OS = "ubuntu"
-ARCH = "amd64"
+PUBKEY_PATH = os.path.join(DATA_DIR, "sig", "index", "ci.pub")
 
 load_dotenv(ENV_FILE)
+
+OS = os.getenv("OS", "ubuntu")
+ARCH = os.getenv("ARCH", "amd64")
+
+PUBKEY_URL = os.getenv("PUBKEY_URL", "https://example.com/pubkey")
  
-def update(args: argparse.Namespace) -> int:
+def update(_: argparse.Namespace) -> int:
     return repman.update_index()
      
 def install(args: argparse.Namespace) -> int:
@@ -37,7 +37,7 @@ def uninstall(args: argparse.Namespace) -> int:
         return repman.uninstall(args.name)
     return repman.uninstall(args.name, args.version)
 
-def upgrade(args: argparse.Namespace) -> int:
+def upgrade(_: argparse.Namespace) -> int:
 
     # get all installed packages
     try :
@@ -63,11 +63,29 @@ def upgrade(args: argparse.Namespace) -> int:
     return 0
 
 
-def fetch_public_key(args: argparse.Namespace) -> str:
+def list_pkgs(_: argparse.Namespace) -> int:
+    if not os.path.exists(INSTALLED_PATH):
+        print("No packages installed.")
+        return 0
+    try:
+        with open(INSTALLED_PATH, "r") as f:
+            installed = json.load(f)
+        if not installed:
+            print("No packages installed.")
+            return 0
+        for name, version in installed.items():
+            print(f"{name}  {version}")
+    except Exception as e:
+        print(f"Error reading {INSTALLED_PATH}: {e}")
+        return 1
+    return 0
+
+
+def fetch_public_key(_: argparse.Namespace) -> str:
     return repman.download(PUBKEY_URL, PUBKEY_PATH) # eventually implement atomic rewrite in C
 
 
-def ensure_dirs(args: argparse.Namespace) -> None:
+def ensure_dirs(_: argparse.Namespace) -> None:
     return repman.ensure_dirs()
 
 def build_parser() -> argparse.ArgumentParser:
@@ -88,6 +106,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("name", help="Package name")
     sp.add_argument("-v", "--version", type=str, required=False, help="Install a specific version")
     sp.set_defaults(func=install)
+
+    # list installed packages
+    sp = sub.add_parser("list", help="List installed packages and their versions")
+    sp.set_defaults(func=list_pkgs)
 
     # uninstall
     sp = sub.add_parser("uninstall", help="usage: uninstall <name> -> uninstalls a package")
