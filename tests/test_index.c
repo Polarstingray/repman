@@ -5,41 +5,8 @@
  * Run via: make test
  */
 
-#include <assert.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-
-#include "../src/lib/util.h"
 #include "../src/lib/index.h"
-
-/* ── Tiny test harness ───────────────────────────────────────────────────── */
-
-static int tests_run    = 0;
-static int tests_passed = 0;
-
-#define CHECK(expr) do { \
-    tests_run++; \
-    if (expr) { \
-        tests_passed++; \
-        printf("  PASS  %s\n", #expr); \
-    } else { \
-        printf("  FAIL  %s  (line %d)\n", #expr, __LINE__); \
-    } \
-} while(0)
-
-#define SKIP(msg) do { \
-    tests_run++; \
-    tests_passed++; \
-    printf("  SKIP  %s\n", msg); \
-} while(0)
-
-static int has_command(const char *cmd) {
-    char which_cmd[256];
-    snprintf(which_cmd, sizeof(which_cmd), "which %s > /dev/null 2>&1", cmd);
-    int rc = system(which_cmd);
-    return (rc == 0);
-}
+#include "test_harness.h"
 
 /* ── Test cases ─────────────────────────────────────────────────────────────── */
 
@@ -120,36 +87,20 @@ static void test_repman_get_pkg_url(void) {
         return;
     }
 
-    cJSON *index = repman_parse_json(index_path);
-    if (!index) {
-        SKIP("failed to parse index");
-        return;
-    }
-
     char *resolved = get_version(index_path, "test", "1.2.10", "ubuntu", "amd64");
     if (!resolved) {
         SKIP("failed to resolve version");
-        cJSON_Delete(index);
         return;
     }
 
-    cJSON *pkg = cJSON_GetObjectItemCaseSensitive(index, "test");
-    cJSON *target = get_pkg(pkg, resolved, "ubuntu", "amd64");
+    char *url = repman_get_pkg_url(index_path, "test", resolved, "ubuntu", "amd64");
     free(resolved);
-    if (!target) {
-        SKIP("target not found");
-        cJSON_Delete(index);
-        return;
-    }
 
-    char *url = repman_get_pkg_url(target);
     CHECK(url != NULL);
     if (url) {
-        CHECK(strstr(url, "http") == url); // Should start with http
+        CHECK(strstr(url, "http") == url); /* URL should start with http */
         free(url);
     }
-
-    cJSON_Delete(index);
 }
 
 static void test_repman_update_index(void) {
@@ -171,7 +122,7 @@ int main(void) {
     printf("=== test_index ===");
 
     test_cmp_versions();
-    tess_repman_parse_json();
+    test_repman_parse_json();
     test_get_pkg();
     test_repman_get_pkg_url();
     test_repman_update_index();

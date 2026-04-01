@@ -48,6 +48,22 @@ _lib.get_version.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, 
 _lib.repman_install_latest.restype = ctypes.c_int
 _lib.repman_install_latest.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
 
+# int repman_self_update(const char*, const char*, const char*)
+_lib.repman_self_update.restype = ctypes.c_int
+_lib.repman_self_update.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
+
+# int repman_update_installed(const char*, const char*, const char*, const char*)
+_lib.repman_update_installed.restype = ctypes.c_int
+_lib.repman_update_installed.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
+
+# int repman_upgrade(const char*, const char*)
+_lib.repman_upgrade.restype = ctypes.c_int
+_lib.repman_upgrade.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+
+# int repman_list_installed(void)
+_lib.repman_list_installed.restype = ctypes.c_int
+_lib.repman_list_installed.argtypes = []
+
 # load libc for free()
 _libc = ctypes.CDLL(None)
 _libc.free.argtypes = [ctypes.c_void_p]
@@ -55,6 +71,8 @@ _libc.free.argtypes = [ctypes.c_void_p]
 
 def get_data_dir():
     ptr = _lib.repman_get_data_dir()
+    if not ptr:
+        raise RuntimeError("repman_get_data_dir returned NULL")
     result = ctypes.string_at(ptr).decode()
     _libc.free(ptr)
     return result
@@ -92,3 +110,17 @@ def get_version(index_path, name, version, os, arch):
 
 def install_latest(name, os, arch):
     return _lib.repman_install_latest(name.encode(), os.encode(), arch.encode())
+
+def self_update(version, os_name, arch) -> int:
+    return _lib.repman_self_update(version.encode(), os_name.encode(), arch.encode())
+
+def update_installed(installed_path, name, version, action="install") -> int:
+    return _lib.repman_update_installed(
+        installed_path.encode(), name.encode(), version.encode(), action.encode()
+    )
+
+def upgrade(os_name, arch) -> int:
+    return _lib.repman_upgrade(os_name.encode(), arch.encode())
+
+def list_installed() -> int:
+    return _lib.repman_list_installed()

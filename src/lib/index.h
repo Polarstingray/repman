@@ -5,13 +5,14 @@
 #define REPMAN_INDEX_H
 
 #include <cjson/cJSON.h>
+#include "repman.h"
 
 /*
 
 */
 
 int    repman_update_index(void);
-int    repman_update_key(void);
+int    repman_update_key(void);  /* not yet implemented */
 char*  repman_full_path(const char *dir_, const char *name);
 cJSON *repman_parse_json(const char *filepath);
 int    cmp_versions(const char *a, const char *b);

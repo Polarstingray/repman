@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
-#include <curl/curl.h>
 
 /* Generic helper remains file-local */
 int parse_sha256(char *sha256_str, char *sha256) {
