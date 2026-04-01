@@ -4,6 +4,7 @@
 #define REPMAN_VERIFY_H
 
 #include <stddef.h>  /* size_t */
+#include "repman.h"
 
 /*
     Verify the SHA256 hash of a file against a provided hash file.

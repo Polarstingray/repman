@@ -82,7 +82,7 @@ test: $(TEST_FILES) $(TEST_SRCS) | $(BUILD_DIR)
 	@for t in $(TEST_FILES); do \
 	    name=$$(basename $$t .c); \
 	    echo "Building test: $$name"; \
-	    $(CC) $(CFLAGS) -DTESTING $(TEST_SRCS) $$t -o $(BUILD_DIR)/$$name -lcurl -lcjson; \
+	    $(CC) $(CFLAGS) -DTESTING -I$(TEST_DIR) $(TEST_SRCS) $$t -o $(BUILD_DIR)/$$name -lcurl -lcjson; \
 	    echo "Running test: $$name"; \
 	    $(BUILD_DIR)/$$name; \
 	done
@@ -140,13 +140,23 @@ install: $(LIB)
 	fi
 
 	# Create venv and install Python dependencies
-	python3 -m venv $(DATADIR)/cli/venv
+	python3 -m venv --clear $(DATADIR)/cli/venv
 	$(DATADIR)/cli/venv/bin/pip3 install -q python-dotenv
 
 	# Write the repman wrapper script
 	@printf '#!/bin/sh\nexec "$(DATADIR)/cli/venv/bin/python3" "$(DATADIR)/cli/repcli.py" "$$@"\n' \
 		> $(BINDIR)/$(BIN)
 	chmod +x $(BINDIR)/$(BIN)
+
+	# Register repman source version in installed.json (uses repman_update_installed, which
+	# creates the file if absent and skips the write if repman is already registered)
+	@python3 -c "\
+	import sys; \
+	sys.path.insert(0, '$(DATADIR)/cli'); \
+	import repman; \
+	rc = repman.update_installed('$(DATADIR)/index/installed.json', 'repman', '0.0.0'); \
+	print('repman 0.0.0 registered (source install)' if rc == 0 else 'repman already registered, keeping existing version' if rc == 1 else 'error registering repman: rc=' + str(rc)); \
+	sys.exit(0 if rc >= 0 else 1)"
 
 	# Warn if BINDIR is not in PATH
 	@if ! printf '%s' "$$PATH" | tr ':' '\n' | grep -qx '$(BINDIR)'; then \

@@ -90,7 +90,7 @@ char *get_version(const char *index_path, const char* name, const char* version,
         return NULL;
     }
 
-    char os_arch[256];
+    char os_arch[REPMAN_OS_MAX];
     snprintf(os_arch, sizeof(os_arch), "%s_%s", os, arch);
 
     const char *base_version = version;
@@ -158,7 +158,7 @@ cJSON *get_pkg(cJSON *pkg, const char* version, const char* os, const char* arch
     cJSON *targets = cJSON_GetObjectItemCaseSensitive(ver_obj, "targets");
     if (targets == NULL) return NULL;
 
-    char os_arch[256];
+    char os_arch[REPMAN_OS_MAX];
     snprintf(os_arch, sizeof(os_arch), "%s_%s", os, arch);
 
     return cJSON_GetObjectItemCaseSensitive(targets, os_arch);
@@ -215,20 +215,20 @@ int repman_update_index(void) {
 
     char* ipath = repman_full_path(INDEX_DIR, INDEX_NAME);
     
-    char sig_name[32] = INDEX_NAME;
+    char sig_name[REPMAN_NAME_MAX] = INDEX_NAME;
     strcat(sig_name, ".minisig");
     // char* sig_path = repman_full_path(SIG_DIR, sig_name);
     char* sig_path = repman_path_join(sig_dir, sig_name);
 
-    char sha256_name[32] = INDEX_NAME;
+    char sha256_name[REPMAN_NAME_MAX] = INDEX_NAME;
     strcat(sha256_name, ".sha256");
     // char* sha256_path = repman_full_path(sig_dir, sha256_name);
     char* sha256_path = repman_path_join(sig_dir, sha256_name);
 
     char *pubkey_path = repman_full_path(SIG_DIR, PUBKEY);
     char *download_dir = repman_path_join(data_dir, DOWNLOAD_DIR);
-    char index_tmp_name[32] = INDEX_NAME;
-    char sha256_tmp_name[32] = INDEX_NAME;
+    char index_tmp_name[REPMAN_NAME_MAX] = INDEX_NAME;
+    char sha256_tmp_name[REPMAN_NAME_MAX] = INDEX_NAME;
     strcat(index_tmp_name, ".tmp");
     char *sig_tmp_name = repman_str_dup(index_tmp_name);
     
@@ -381,12 +381,9 @@ int repman_is_pkg_behind(const char *installed_path, const char *index_path, con
     return rc;
 }
 
-int repman_update_key() {
-    // implementation here
-
-    
-
-    return 0;
+int repman_update_key(void) {
+    fprintf(stderr, "repman_update_key: not implemented\n");
+    return REPMAN_ERR;
 }
 
 

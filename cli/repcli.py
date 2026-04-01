@@ -3,7 +3,6 @@
 import os
 import repman
 import argparse
-import json
 
 from dotenv import load_dotenv
 
@@ -24,7 +23,10 @@ def update(_: argparse.Namespace) -> int:
     return repman.update_index()
      
 def install(args: argparse.Namespace) -> int:
-    
+    if args.name == "repman":
+        print("error: use 'repman upgrade' to update repman itself")
+        return 1
+
     if (not args.version) :
         return repman.install_latest(args.name, OS, ARCH)
 
@@ -33,52 +35,19 @@ def install(args: argparse.Namespace) -> int:
     return repman.install(args.name, args.version, OS, ARCH)
 
 def uninstall(args: argparse.Namespace) -> int:
+    if args.name == "repman":
+        print("error: repman cannot be uninstalled")
+        return 1
     if (not args.version) :
         return repman.uninstall(args.name)
     return repman.uninstall(args.name, args.version)
 
 def upgrade(_: argparse.Namespace) -> int:
-
-    # get all installed packages
-    try :
-        with open(INSTALLED_PATH, "r") as f:
-            installed = json.load(f)
-
-        cnt = 0
-        for pkg in installed:
-            latest_ver = repman.get_version(INDEX_PATH, pkg, installed[pkg], OS, ARCH)
-            if (latest_ver is not None) and (repman.cmp_versions(installed[pkg], latest_ver) < 0) :
-                cnt += 1
-                rc = repman.install_latest(pkg, OS, ARCH)
-                if rc != 0 :
-                    print(f"Failed to install {pkg} version {latest_ver} (latest: {installed[pkg]}")
-                    return rc
-    
-    except Exception as e:
-        print(f"Error reading {INSTALLED_PATH}: {e}")
-        return 1
-        
-    if cnt == 0 :
-        print("Everything up-to-date")
-    return 0
+    return repman.upgrade(OS, ARCH)
 
 
 def list_pkgs(_: argparse.Namespace) -> int:
-    if not os.path.exists(INSTALLED_PATH):
-        print("No packages installed.")
-        return 0
-    try:
-        with open(INSTALLED_PATH, "r") as f:
-            installed = json.load(f)
-        if not installed:
-            print("No packages installed.")
-            return 0
-        for name, version in installed.items():
-            print(f"{name}  {version}")
-    except Exception as e:
-        print(f"Error reading {INSTALLED_PATH}: {e}")
-        return 1
-    return 0
+    return repman.list_installed()
 
 
 def fetch_public_key(_: argparse.Namespace) -> str:

@@ -3,6 +3,7 @@
 
 #include <stddef.h>  /* size_t */
 #include <stdio.h>   /* FILE  */
+#include "repman.h"
 
 /* ─────────────────────────────────────────────
  * repman/src/util.h
@@ -39,7 +40,7 @@ char *repman_get_local_path(void);
 void  repman_ensure_dirs(void);
 
 
-/* Network helpers */
-int   repman_download(const char *url, const char *dest_path);
+/* Network helpers — implemented in net.c, re-exported here for convenience */
+#include "net.h"
 
 #endif /* REPMAN_UTIL_H */
