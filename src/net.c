@@ -1,7 +1,9 @@
 #include "lib/net.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <curl/curl.h>
+#include "lib/repman.h"
 
 int repman_download(const char *url, const char *dest_path) {
     CURL *curl_handle = NULL;
@@ -42,4 +44,24 @@ int repman_download(const char *url, const char *dest_path) {
     if (file) fclose(file);
     curl_global_cleanup();
     return (res == CURLE_OK) ? 0 : -1;
+}
+
+int repman_download_atomic(const char *url, const char *dest_path) {
+    char tmp_path[REPMAN_PATH_MAX];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", dest_path);
+
+    int rc = repman_download(url, tmp_path);
+    if (rc != 0) {
+        remove(tmp_path);
+        return REPMAN_ERR;
+    }
+
+    if (rename(tmp_path, dest_path) != 0) {
+        fprintf(stderr, "repman_download_atomic: rename '%s' -> '%s' failed\n",
+                tmp_path, dest_path);
+        remove(tmp_path);
+        return REPMAN_ERR;
+    }
+
+    return REPMAN_OK;
 }

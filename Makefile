@@ -141,7 +141,7 @@ install: $(LIB)
 
 	# Create venv and install Python dependencies
 	python3 -m venv --clear $(DATADIR)/cli/venv
-	$(DATADIR)/cli/venv/bin/pip3 install -q python-dotenv
+	$(DATADIR)/cli/venv/bin/pip3 install -q python-dotenv "textual>=0.80.0"
 
 	# Write the repman wrapper script
 	@printf '#!/bin/sh\nexec "$(DATADIR)/cli/venv/bin/python3" "$(DATADIR)/cli/repcli.py" "$$@"\n' \

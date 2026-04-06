@@ -95,3 +95,51 @@ int repman_list_installed(void) {
     cJSON_Delete(installed);
     return REPMAN_OK;
 }
+
+int repman_list_available(const char *os, const char *arch) {
+    char *index_path = repman_full_path("index", "index.json");
+
+    if (!repman_file_exists(index_path)) {
+        printf("No index found — run 'repman update' first.\n");
+        free(index_path);
+        return REPMAN_OK;
+    }
+
+    cJSON *index = repman_parse_json(index_path);
+    free(index_path);
+    if (index == NULL) {
+        fprintf(stderr, "Failed to read index.json\n");
+        return REPMAN_ERR;
+    }
+
+    char os_arch[REPMAN_OS_MAX];
+    snprintf(os_arch, sizeof(os_arch), "%s_%s", os, arch);
+
+    int found = 0;
+    cJSON *pkg = NULL;
+    cJSON_ArrayForEach(pkg, index) {
+        const char *name = pkg->string;
+        if (!name) continue;
+
+        cJSON *latest_node = cJSON_GetObjectItemCaseSensitive(pkg, "latest");
+        if (!latest_node || !cJSON_IsString(latest_node)) continue;
+        const char *latest_ver = latest_node->valuestring;
+
+        cJSON *versions = cJSON_GetObjectItemCaseSensitive(pkg, "versions");
+        if (!versions) continue;
+        cJSON *ver_obj  = cJSON_GetObjectItemCaseSensitive(versions, latest_ver);
+        if (!ver_obj)  continue;
+        cJSON *targets  = cJSON_GetObjectItemCaseSensitive(ver_obj, "targets");
+        if (!targets)  continue;
+        if (!cJSON_GetObjectItemCaseSensitive(targets, os_arch)) continue;
+
+        printf("%s  %s\n", name, latest_ver);
+        found++;
+    }
+
+    if (found == 0)
+        printf("No packages available for %s.\n", os_arch);
+
+    cJSON_Delete(index);
+    return REPMAN_OK;
+}
