@@ -17,4 +17,10 @@ int repman_upgrade(const char *os, const char *arch);
 */
 int repman_list_installed(void);
 
+/*
+    Print each package in index.json whose latest version has a target for
+    os_arch. Returns REPMAN_OK on success, REPMAN_ERR on failure.
+*/
+int repman_list_available(const char *os, const char *arch);
+
 #endif /* REPMAN_UPGRADE_H */

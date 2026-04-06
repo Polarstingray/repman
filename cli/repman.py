@@ -36,6 +36,18 @@ _lib.repman_get_data_dir.argtypes = []
 _lib.repman_download.restype = ctypes.c_int
 _lib.repman_download.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
 
+# int repman_download_atomic(const char*, const char*)
+_lib.repman_download_atomic.restype = ctypes.c_int
+_lib.repman_download_atomic.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+
+# int repman_verify_sha256(const char*, const char*)
+_lib.repman_verify_sha256.restype = ctypes.c_int
+_lib.repman_verify_sha256.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+
+# int repman_verify_minisig(const char*, const char*, const char*)
+_lib.repman_verify_minisig.restype = ctypes.c_int
+_lib.repman_verify_minisig.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
+
 # int cmp_versions(const char*, const char*)
 _lib.cmp_versions.restype = ctypes.c_int
 _lib.cmp_versions.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
@@ -97,6 +109,15 @@ def update_index() -> int:
 def download(url, dest_path):
     return _lib.repman_download(url.encode(), dest_path.encode())
 
+def download_atomic(url, dest_path) -> int:
+    return _lib.repman_download_atomic(url.encode(), dest_path.encode())
+
+def verify_sha256(filepath, sha256_path) -> int:
+    return _lib.repman_verify_sha256(filepath.encode(), sha256_path.encode())
+
+def verify_minisig(filepath, minisig_path, pubkey_path) -> int:
+    return _lib.repman_verify_minisig(filepath.encode(), minisig_path.encode(), pubkey_path.encode())
+
 def cmp_versions(a, b):
     return _lib.cmp_versions(a.encode(), b.encode())
 
@@ -124,3 +145,10 @@ def upgrade(os_name, arch) -> int:
 
 def list_installed() -> int:
     return _lib.repman_list_installed()
+
+# int repman_list_available(const char*, const char*)
+_lib.repman_list_available.restype  = ctypes.c_int
+_lib.repman_list_available.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+
+def list_available(os_name: str, arch: str) -> int:
+    return _lib.repman_list_available(os_name.encode(), arch.encode())
