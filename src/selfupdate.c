@@ -9,7 +9,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
+
+/* Fork, exec argv[0..], wait for exit.  Returns 0 on success, -1 on failure. */
+static int run_cmd(char *const argv[]) {
+    pid_t pid = fork();
+    if (pid < 0) { perror("fork"); return -1; }
+    if (pid == 0) {
+        execvp(argv[0], argv);
+        perror("execvp");
+        _exit(127);
+    }
+    int status;
+    waitpid(pid, &status, 0);
+    return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
+}
 
 int repman_self_update(const char *version, const char *os, const char *arch) {
     int rc = 0;
@@ -159,6 +174,34 @@ int repman_self_update(const char *version, const char *os, const char *arch) {
     }
 
     free(extracted_root);
+
+    if (rc != 0) goto cleanup_staging;
+
+    /* Recreate the venv and reinstall Python deps so textual and python-dotenv
+     * are always present after a self-update, regardless of how repman was
+     * first installed (make install vs. extracted tarball). */
+    {
+        char *venv_dir  = repman_path_join(data_dir, "cli/venv");
+        char *pip_path  = repman_path_join(venv_dir, "bin/pip3");
+
+        char *venv_argv[] = { "python3", "-m", "venv", "--clear", venv_dir, NULL };
+        if (run_cmd(venv_argv) != 0) {
+            fprintf(stderr, "Warning: failed to recreate venv at %s\n", venv_dir);
+            rc = -1;
+        }
+
+        if (rc == 0) {
+            char *pip_argv[] = { pip_path, "install", "-q",
+                                 "python-dotenv", "textual>=0.80.0", NULL };
+            if (run_cmd(pip_argv) != 0) {
+                fprintf(stderr, "Warning: failed to install Python deps into venv\n");
+                rc = -1;
+            }
+        }
+
+        free(pip_path);
+        free(venv_dir);
+    }
 
     if (rc != 0) goto cleanup_staging;
 
