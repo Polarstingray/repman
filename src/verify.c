@@ -11,15 +11,15 @@
 #include <stdlib.h>
 
 /* Generic helper remains file-local */
-int parse_sha256(char *sha256_str, char *sha256) {
-    // Extract the checksum from the output
+static int parse_sha256(char *sha256_str, char *sha256, size_t sha256_len) {
     char *token = strtok(sha256_str, " ");
     if (token == NULL) {
         fprintf(stderr, "Failed to parse sha256sum output\n");
         return -1;
     }
-    strcpy(sha256, token);
-    // Remove any trailing newline from the actual checksum
+    strncpy(sha256, token, sha256_len - 1);
+    sha256[sha256_len - 1] = '\0';
+    /* Remove any trailing newline from the actual checksum */
     sha256[strcspn(sha256, "\r\n")] = '\0';
     if (strlen(sha256) != 64) {
         fprintf(stderr, "Invalid actual checksum length: %s\n", sha256);
@@ -74,8 +74,8 @@ int repman_verify_sha256(const char *filepath, const char *sha256_path) {
         return -1;
     }
     buffer[count] = '\0';  // null-terminate the output
-    char actual_checksum[65]; 
-    if (parse_sha256(buffer, actual_checksum) != 0) {
+    char actual_checksum[65];
+    if (parse_sha256(buffer, actual_checksum, sizeof(actual_checksum)) != 0) {
         return -1;
     }
     
@@ -87,19 +87,17 @@ int repman_verify_sha256(const char *filepath, const char *sha256_path) {
     }
     
     char expected_checksum[65];
-    if (parse_sha256(checksum_file, expected_checksum) == 0) {
-        if (strcmp(actual_checksum, expected_checksum) != 0) {
-            fprintf(stderr, "Checksum mismatch: expected %s, got %s\n", expected_checksum, actual_checksum);
-        } else {
+    if (parse_sha256(checksum_file, expected_checksum, sizeof(expected_checksum)) == 0) {
+        if (strcmp(actual_checksum, expected_checksum) == 0) {
             printf("Checksum verified successfully: %s\n", actual_checksum);
             free(checksum_file);
             return 0;
         }
+        fprintf(stderr, "Checksum mismatch: expected %s, got %s\n", expected_checksum, actual_checksum);
     } else {
         fprintf(stderr, "Failed to parse expected checksum from file: %s\n", sha256_path);
     }
 
-fail :
     fprintf(stderr, "Failed to verify checksum for file: %s\n", filepath);
     free(checksum_file);
     return -1;
@@ -132,16 +130,3 @@ int repman_verify_minisig(const char *filepath, const char *minisig_path, const 
 }
 
 
-// int main() {
-//     repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json", "index.json");
-//     repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.sha256", "index.json.sha256");
-//     repman.download("https://raw.githubusercontent.com/Polarstingray/packages/refs/heads/main/index/index.json.minisig", "index.json.minisig");
-//     repman.download("https://raw.githubusercontent.com/Polarstingray/repman-ci/refs/heads/main/ci.pub", "ci.pub");
-//     repman.verify_sha256("index.json", "index.json.sha256");
-//     repman.verify_minisig("index.json", "index.json.minisig", "ci.pub");
-//     return 0;
-// }
-
-
-// gcc src/verify.c src/util.c -lcurl -o ./build/verify.o
-// ./build/verify.o

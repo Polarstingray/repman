@@ -12,17 +12,6 @@
 #include <dirent.h>
 #include <cjson/cJSON.h>
 
-static int repman_validate_pkg_name(const char *name) {
-    if (name == NULL || name[0] == '\0') {
-        fprintf(stderr, "Package name must not be empty\n");
-        return REPMAN_ERR;
-    }
-    if (strstr(name, "..") != NULL || strchr(name, '/') != NULL) {
-        fprintf(stderr, "Invalid package name: %s\n", name);
-        return REPMAN_ERR;
-    }
-    return REPMAN_OK;
-}
 
 static int unlink_pkg_files(const char *name, const char *version, const char *type) {
     if (name == NULL || version == NULL || type == NULL) {

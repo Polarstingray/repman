@@ -19,18 +19,6 @@
 #define PUBKEY "sig/ci.pub"
 #define INSTALL_JSON "index/installed.json"
 
-/* Reject package names that could escape the data directory. */
-static int repman_validate_pkg_name(const char *name) {
-    if (name == NULL || name[0] == '\0') {
-        fprintf(stderr, "Package name must not be empty\n");
-        return REPMAN_ERR;
-    }
-    if (strstr(name, "..") != NULL || strchr(name, '/') != NULL) {
-        fprintf(stderr, "Invalid package name: %s\n", name);
-        return REPMAN_ERR;
-    }
-    return REPMAN_OK;
-}
 
 int check_for_executables(const char *path) {
     DIR *dr;
@@ -170,6 +158,25 @@ int check_extracted_package(const char *old_installed_path, const char *bin_dir)
 }
 
 
+/* Remove symlinks in local_dir that correspond to files in pkg_dir. */
+static void rollback_symlinks(const char *pkg_dir, const char *local_dir) {
+    if (pkg_dir == NULL || local_dir == NULL) return;
+    DIR *dr = opendir(pkg_dir);
+    if (dr == NULL) return;
+    struct dirent *de;
+    while ((de = readdir(dr)) != NULL) {
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0) continue;
+        char *link = repman_path_join(local_dir, de->d_name);
+        if (link) {
+            struct stat st;
+            if (lstat(link, &st) == 0 && S_ISLNK(st.st_mode))
+                unlink(link);
+            free(link);
+        }
+    }
+    closedir(dr);
+}
+
 static int symlink_pkg_data(const char *installed_path, const char *local_path, const char* pkg_name) {
     size_t pkg_tmp_len = strlen(pkg_name) + 4 + 1; /* "_tmp" + NUL */
     char *pkg_name_tmp = malloc(pkg_tmp_len);
@@ -198,8 +205,12 @@ static int symlink_pkg_data(const char *installed_path, const char *local_path, 
     }
     printf("Symlinked %s -> %s\n", installed_data_dir, new_tmp_dir);
 
-    char *new_data_dir = repman_str_dup(new_tmp_dir);
-    repman_str_repl(new_data_dir, "_tmp", ""); 
+    char *new_data_dir = repman_str_repl(repman_str_dup(new_tmp_dir), "_tmp", "");
+    if (new_data_dir == NULL || strstr(new_data_dir, "_tmp") != NULL) {
+        fprintf(stderr, "Failed to compute data directory path\n");
+        free(new_data_dir); free(installed_data_dir); free(new_tmp_dir);
+        return -1;
+    }
     if (rename(new_tmp_dir, new_data_dir) != 0) {
         perror("rename");
         fprintf(stderr, "Failed to atomic rewrite %s -> %s\n", new_tmp_dir, new_data_dir);
@@ -252,7 +263,7 @@ static int symlink_pkg_files(const char *new_installed_path, const char *local_p
             free(tmp_path);
             continue;
         } 
-        if (strcmp(type, "bin") && !((st.st_mode & S_IXUSR) || 
+        if (strcmp(type, "bin") == 0 && !((st.st_mode & S_IXUSR) ||
             (st.st_mode & S_IXGRP) || (st.st_mode & S_IXOTH))) {
             fprintf(stderr, "File is not executable: %s\n", installed_type_path);
             free(installed_type_path);
@@ -310,10 +321,15 @@ int repman_download_and_install_pkg(const char *name, const char *version, const
     char* index_path = repman_path_join(index_dir, "index.json");
 
     char *url = repman_get_pkg_url(index_path, name, version, os, arch);
+    if (url == NULL) {
+        fprintf(stderr, "Package '%s' version '%s' not found in index\n", name, version);
+        free(index_path); free(installed); free(index_dir);
+        return REPMAN_ERR;
+    }
     char* pkg_and_ver = malloc(strlen(name) + strlen(version) + 3);
     if (pkg_and_ver == NULL) {
-        free(index_path); free(installed); free(url); free(index_dir);
-        printf("Failed to malloc pkg_and_ver\n");
+        free(url); free(index_path); free(installed); free(index_dir);
+        fprintf(stderr, "Failed to malloc pkg_and_ver\n");
         return -1;
     }
     snprintf(pkg_and_ver, strlen(name) + strlen(version) + 3, "%s-v%s", name, version);
@@ -345,9 +361,17 @@ int repman_download_and_install_pkg(const char *name, const char *version, const
     char* sig_path = NULL;
     char* sha256_path = NULL;
 
-    size_t ver_need = (strlen(pkg_ver) - strlen(app_name) - strlen("_v") + 1);
-    char *ver = malloc(ver_need);
-    memcpy(ver, pkg_ver + (strlen(app_name) + strlen("_v")), ver_need);
+    int bin_linked = 0;
+    int lib_linked = 0;
+    int data_linked = 0;
+
+    /* version is always equal to the ver component of pkg_ver — use it directly */
+    char *ver = repman_str_dup(version);
+    if (ver == NULL) {
+        fprintf(stderr, "Failed to allocate version string\n");
+        rc = -1;
+        goto cleanup;
+    }
 
     // check if new_installed_path is a dir already
     if (repman_dir_exists(new_installed_path) != 0) {
@@ -425,16 +449,20 @@ int repman_download_and_install_pkg(const char *name, const char *version, const
         rc = -1;
         goto cleanup;
     }
+    bin_linked = 1;
+
     int lib_rc = symlink_pkg_files(new_installed_path, local_path, "lib");
     if (lib_rc != 0 && lib_rc != -2) {
         rc = -1;
         goto cleanup;
     }
+    if (lib_rc == 0) lib_linked = 1;
 
     if (symlink_pkg_data(new_installed_path, local_path, app_name) != 0) {
         rc = -1;
         goto cleanup;
     }
+    data_linked = 1;
 
     int installed_rc = repman_update_installed(installed, app_name, ver, "install");
     if (installed_rc != 0 && installed_rc != 1) {
@@ -445,6 +473,32 @@ int repman_download_and_install_pkg(const char *name, const char *version, const
     printf("Package installed successfully.\n");
     
 cleanup:
+    /* Roll back any symlinks we created if the install failed. */
+    if (rc != 0 && local_path != NULL && new_installed_path != NULL) {
+        if (bin_linked) {
+            char *bin_pkg   = repman_path_join(new_installed_path, "bin");
+            char *bin_local = repman_path_join(local_path, "bin");
+            if (bin_pkg && bin_local) rollback_symlinks(bin_pkg, bin_local);
+            free(bin_pkg); free(bin_local);
+        }
+        if (lib_linked) {
+            char *lib_pkg   = repman_path_join(new_installed_path, "lib");
+            char *lib_local = repman_path_join(local_path, "lib");
+            if (lib_pkg && lib_local) rollback_symlinks(lib_pkg, lib_local);
+            free(lib_pkg); free(lib_local);
+        }
+        if (data_linked && app_name != NULL) {
+            char *share_local = repman_path_join(local_path, "share");
+            char *data_link   = share_local ? repman_path_join(share_local, app_name) : NULL;
+            if (data_link) {
+                struct stat st;
+                if (lstat(data_link, &st) == 0 && S_ISLNK(st.st_mode))
+                    unlink(data_link);
+                free(data_link);
+            }
+            free(share_local);
+        }
+    }
     repman_rm(download_dir);
     free(ver);
     free(local_path);
@@ -456,6 +510,8 @@ cleanup:
     free(pkg_dir);
     free(download_dir);
     free(base_path);
+    free(url);
+    free(pkg_and_ver);
     free(pkg_url);
     free(sig_url);
     free(sha256_url);
@@ -483,7 +539,7 @@ int repman_install_latest(const char* name, const char* os, const char* arch) {
 
     if (resolved_version == NULL) {
         fprintf(stderr, "Package not found: %s\n", name);
-        free(index_path); free(curr_pkg_ver); free(resolved_version);
+        free(index_path); free(curr_pkg_ver); free(installed_json);
         return -1;
     }
 
@@ -492,6 +548,7 @@ int repman_install_latest(const char* name, const char* os, const char* arch) {
     free(resolved_version);
     free(curr_pkg_ver);
     free(index_path);
+    free(installed_json);
     return rc;
 }
 
