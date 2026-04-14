@@ -30,6 +30,7 @@ cp "$PROJECT_DIR/build/librepman.so" "$OUT_DIR/data/build/"
 echo "Copying CLI files..."
 cp "$PROJECT_DIR/cli/repcli.py" "$OUT_DIR/data/cli/"
 cp "$PROJECT_DIR/cli/repman.py" "$OUT_DIR/data/cli/"
+cp "$PROJECT_DIR/cli/reptui.py" "$OUT_DIR/data/cli/"
 
 # 5. Copy config
 echo "Setting up configuration..."
@@ -51,7 +52,7 @@ fi
 # 7. Set up Python venv
 echo "Setting up Python virtual environment..."
 python3 -m venv "$OUT_DIR/data/cli/venv"
-"$OUT_DIR/data/cli/venv/bin/pip" install python-dotenv --quiet
+"$OUT_DIR/data/cli/venv/bin/pip" install python-dotenv "textual>=0.80.0"  #--quiet
 
 # 8. Write entrypoint script
 cat > "$OUT_DIR/bin/repman" << 'EOF'

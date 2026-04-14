@@ -325,7 +325,12 @@ char *repman_get_data_dir(void) {
     } else {
         const char *home = getenv("HOME");
         if (home == NULL) {
-            home = getpwuid(getuid())->pw_dir; 
+            struct passwd *pw = getpwuid(getuid());
+            if (pw == NULL) {
+                REPMAN_LOG_ERR("getpwuid: failed to look up home directory\n");
+                return NULL;
+            }
+            home = pw->pw_dir;
         }
         base = repman_path_join(home, ".local/share/repman");
     }
@@ -340,11 +345,33 @@ char *repman_get_local_path(void) {
     } else {
         const char *home = getenv("HOME");
         if (home == NULL) {
-            home = getpwuid(getuid())->pw_dir;
+            struct passwd *pw = getpwuid(getuid());
+            if (pw == NULL) {
+                REPMAN_LOG_ERR("getpwuid: failed to look up home directory\n");
+                return NULL;
+            }
+            home = pw->pw_dir;
         }
         local = repman_path_join(home, ".local");
     }
     return local;
+}
+
+/* Remove all entries inside tmp_dir (but leave the directory itself). */
+static void repman_clean_tmp(const char *tmp_dir) {
+    if (tmp_dir == NULL) return;
+    DIR *d = opendir(tmp_dir);
+    if (d == NULL) return;
+    struct dirent *entry;
+    while ((entry = readdir(d)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+        char *full = repman_path_join(tmp_dir, entry->d_name);
+        if (full) {
+            repman_rm(full);
+            free(full);
+        }
+    }
+    closedir(d);
 }
 
 void repman_ensure_dirs(void) {
@@ -358,7 +385,24 @@ void repman_ensure_dirs(void) {
     repman_mkdir_p(index);
     repman_mkdir_p(sig);
     repman_mkdir_p(tmp);
+    repman_clean_tmp(tmp);   /* remove any orphaned staging files from prior crashes */
     repman_mkdir_p(cache);
     repman_mkdir_p(packages);
     free(base); free(index); free(sig); free(tmp); free(cache); free(packages);
+}
+
+int repman_validate_pkg_name(const char *name) {
+    if (name == NULL || name[0] == '\0') {
+        fprintf(stderr, "Package name must not be empty\n");
+        return REPMAN_ERR;
+    }
+    if (strlen(name) >= REPMAN_NAME_MAX) {
+        fprintf(stderr, "Package name too long: %s\n", name);
+        return REPMAN_ERR;
+    }
+    if (strstr(name, "..") != NULL || strchr(name, '/') != NULL) {
+        fprintf(stderr, "Invalid package name: %s\n", name);
+        return REPMAN_ERR;
+    }
+    return REPMAN_OK;
 }

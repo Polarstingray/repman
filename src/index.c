@@ -49,6 +49,8 @@ cJSON *repman_parse_json(const char *filepath) {
 int cmp_versions(const char *a, const char *b) {
     int maj1, min1, pat1, maj2, min2, pat2;
 
+    if (a == NULL || b == NULL) return -2;
+
     if (sscanf(a, "%d.%d.%d", &maj1, &min1, &pat1) != 3) {
         fprintf(stderr, "Invalid version format: %s\n", a);
         return -2;
@@ -80,13 +82,14 @@ char *get_version(const char *index_path, const char* name, const char* version,
 
     cJSON *pkg = cJSON_GetObjectItemCaseSensitive(index, name);
     if (pkg == NULL) {
-        // fprintf(stderr, "Package not found: %s_v%s\n", name, version);
+        cJSON_Delete(index);
         return NULL;
     }
 
     cJSON *versions = cJSON_GetObjectItemCaseSensitive(pkg, "versions");
     if (versions == NULL) {
         fprintf(stderr, "No versions found for package: %s\n", name);
+        cJSON_Delete(index);
         return NULL;
     }
 
@@ -114,6 +117,10 @@ char *get_version(const char *index_path, const char* name, const char* version,
 
         if (base_version != NULL && base_version[0] != '\0') {
             int cmp = cmp_versions(ver_str, base_version);
+            if (cmp == -2) {
+                fprintf(stderr, "Invalid version format in index for '%s': %s\n", name, ver_str);
+                continue;
+            }
             if (cmp < 0) continue; /* skip versions older than base */
         }
 
@@ -143,6 +150,7 @@ char *get_version(const char *index_path, const char* name, const char* version,
         }
     }
 
+    cJSON_Delete(index);
     return best;
 }
 
@@ -215,29 +223,27 @@ int repman_update_index(void) {
 
     char* ipath = repman_full_path(INDEX_DIR, INDEX_NAME);
     
-    char sig_name[REPMAN_NAME_MAX] = INDEX_NAME;
-    strcat(sig_name, ".minisig");
-    // char* sig_path = repman_full_path(SIG_DIR, sig_name);
+    char sig_name[REPMAN_NAME_MAX];
+    snprintf(sig_name, sizeof(sig_name), "%s.minisig", INDEX_NAME);
     char* sig_path = repman_path_join(sig_dir, sig_name);
 
-    char sha256_name[REPMAN_NAME_MAX] = INDEX_NAME;
-    strcat(sha256_name, ".sha256");
-    // char* sha256_path = repman_full_path(sig_dir, sha256_name);
+    char sha256_name[REPMAN_NAME_MAX];
+    snprintf(sha256_name, sizeof(sha256_name), "%s.sha256", INDEX_NAME);
     char* sha256_path = repman_path_join(sig_dir, sha256_name);
 
     char *pubkey_path = repman_full_path(SIG_DIR, PUBKEY);
     char *download_dir = repman_path_join(data_dir, DOWNLOAD_DIR);
-    char index_tmp_name[REPMAN_NAME_MAX] = INDEX_NAME;
-    char sha256_tmp_name[REPMAN_NAME_MAX] = INDEX_NAME;
-    strcat(index_tmp_name, ".tmp");
-    char *sig_tmp_name = repman_str_dup(index_tmp_name);
-    
-    strcat(sha256_tmp_name, ".tmp.sha256");
-    strcat(sig_tmp_name, ".minisig");
+
+    char index_tmp_name[REPMAN_NAME_MAX];
+    snprintf(index_tmp_name, sizeof(index_tmp_name), "%s.tmp", INDEX_NAME);
+    char sha256_tmp_name[REPMAN_NAME_MAX];
+    snprintf(sha256_tmp_name, sizeof(sha256_tmp_name), "%s.tmp.sha256", INDEX_NAME);
+    char sig_tmp_name_buf[REPMAN_NAME_MAX];
+    snprintf(sig_tmp_name_buf, sizeof(sig_tmp_name_buf), "%s.tmp.minisig", INDEX_NAME);
+    char *sig_tmp_name = sig_tmp_name_buf;
     char *index_tmp_path = repman_path_join(download_dir, index_tmp_name);
     char *index_sha256_tmp_path = repman_path_join(download_dir, sha256_tmp_name);
     char *index_minisig_tmp_path = repman_path_join(download_dir, sig_tmp_name);
-    free(sig_tmp_name); 
 
     int rc = 0;
     // rm -rf download_dir
@@ -316,11 +322,16 @@ int repman_update_installed(const char* installed_path, const char *name, const 
     if (installed == NULL) {
         fprintf(stderr, "Failed to parse installed file: %s\n", installed_path);
         installed = cJSON_Parse("{}");
+        if (installed == NULL) {
+            fprintf(stderr, "Failed to create empty JSON object\n");
+            return -1;
+        }
     }
     cJSON *pkg = cJSON_GetObjectItemCaseSensitive(installed, name);
     if ( pkg != NULL ) {
         if (!strcmp(pkg->valuestring, version)) {
             fprintf(stderr, "Already marked as installed: %s\n", name);
+            cJSON_Delete(installed);
             return 1;
         } else {
             printf("updating %s from version: %s to %s\n", name, pkg->valuestring, version);
@@ -346,11 +357,13 @@ char* repman_get_installed_version(const char *filepath, const char *name) {
         fprintf(stderr, "Failed to parse installed file: %s\n", filepath);
         return NULL;
     }
-    if (cJSON_GetObjectItemCaseSensitive(installed, name) == NULL) {
-        // fprintf(stderr, "Package not marked installed: %s\n", name);
+    cJSON *item = cJSON_GetObjectItemCaseSensitive(installed, name);
+    if (item == NULL) {
+        cJSON_Delete(installed);
         return NULL;
     }
-    char* installed_version = repman_str_dup(cJSON_GetObjectItemCaseSensitive(installed, name)->valuestring);
+    char* installed_version = repman_str_dup(item->valuestring);
+    cJSON_Delete(installed);
     return installed_version;
 }
 

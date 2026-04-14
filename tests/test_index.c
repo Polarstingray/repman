@@ -21,9 +21,15 @@ static void test_cmp_versions(void) {
     CHECK(cmp_versions("2.0.0", "1.0.0") == 1);
     CHECK(cmp_versions("1.0.0", "2.0.0") == -1);
 
-    // Invalid formats
+    /* Invalid / edge-case formats */
     CHECK(cmp_versions("1.0", "1.0.0") == -2);
     CHECK(cmp_versions("1.0.0", "1.0") == -2);
+    CHECK(cmp_versions("", "1.0.0") == -2);
+    CHECK(cmp_versions("1.0.0", "") == -2);
+    CHECK(cmp_versions("a.b.c", "1.0.0") == -2);
+    /* NULL inputs */
+    CHECK(cmp_versions(NULL, "1.0.0") == -2);
+    CHECK(cmp_versions("1.0.0", NULL) == -2);
 }
 
 static void test_repman_parse_json(void) {

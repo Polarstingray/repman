@@ -117,10 +117,12 @@ class TestRepmanCLI(unittest.TestCase):
         # No index present — cannot resolve version, must fail
         result = self.run_cmd("install", "this-package-does-not-exist")
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Package not found", result.stderr)
 
     def test_install_unknown_package_with_version_no_index(self):
         result = self.run_cmd("install", "nonexistent", "-v", "1.0.0")
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not found in index", result.stderr)
 
     # ── uninstall ─────────────────────────────────────────────────────────────
 
@@ -132,17 +134,20 @@ class TestRepmanCLI(unittest.TestCase):
         # No installed.json — package lookup fails
         result = self.run_cmd("uninstall", "nonexistent-pkg")
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not found", result.stderr)
 
     def test_uninstall_not_in_installed_json(self):
         self.write_installed({"other-pkg": "1.0.0"})
         result = self.run_cmd("uninstall", "nonexistent-pkg")
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not found", result.stderr)
 
     # ── upgrade ───────────────────────────────────────────────────────────────
 
     def test_upgrade_missing_installed_json_exits_nonzero(self):
         result = self.run_cmd("upgrade")
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("installed.json", result.stderr)
 
     def test_upgrade_empty_installed_exits_zero(self):
         self.write_installed({})
@@ -161,6 +166,7 @@ class TestRepmanCLI(unittest.TestCase):
         bad_env = {**self.env, "INDEX_URL": "http://localhost:19999/nonexistent.json"}
         result = self.run_cmd("update", env=bad_env)
         self.assertNotEqual(result.returncode, 0)
+        self.assertGreater(len(result.stderr), 0)
 
     # ── fetch-key ─────────────────────────────────────────────────────────────
 
@@ -168,6 +174,7 @@ class TestRepmanCLI(unittest.TestCase):
         bad_env = {**self.env, "PUBKEY_URL": "http://localhost:19999/nonexistent.pub"}
         result = self.run_cmd("fetch-key", env=bad_env)
         self.assertNotEqual(result.returncode, 0)
+        self.assertGreater(len(result.stderr), 0)
 
 
 if __name__ == "__main__":

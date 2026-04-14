@@ -87,6 +87,22 @@ test: $(TEST_FILES) $(TEST_SRCS) | $(BUILD_DIR)
 	    $(BUILD_DIR)/$$name; \
 	done
 
+# ── ASAN / UBSan tests ────────────────────────────────────────────────────────
+# Run all C unit tests compiled with AddressSanitizer + UBSan.
+# Usage:  make test-asan
+
+ASAN_FLAGS = -fsanitize=address,undefined -fno-omit-frame-pointer
+
+.PHONY: test-asan
+test-asan: $(TEST_FILES) $(TEST_SRCS) | $(BUILD_DIR)
+	@for t in $(TEST_FILES); do \
+	    name=$$(basename $$t .c); \
+	    echo "Building ASAN test: $$name"; \
+	    $(CC) $(CFLAGS) $(ASAN_FLAGS) -DTESTING -I$(TEST_DIR) $(TEST_SRCS) $$t -o $(BUILD_DIR)/$$name-asan -lcurl -lcjson; \
+	    echo "Running ASAN test: $$name"; \
+	    $(BUILD_DIR)/$$name-asan; \
+	done
+
 # ── Python CLI tests ──────────────────────────────────────────────────────────
 
 .PHONY: test-cli

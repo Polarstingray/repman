@@ -28,6 +28,9 @@ char *repman_path_join(const char *base, const char *name);
 char *repman_str_repl(char *s, const char *s1, const char *s2);
 int   repman_str_ends_with(const char *str, const char *suffix);
 
+/* Package name validation — rejects empty, too-long, path-traversal names */
+int   repman_validate_pkg_name(const char *name);
+
 /* File helpers */
 char *repman_read_file(const char *path, size_t *out_len);
 int   repman_write_file(const char *path, const char *data, size_t len);

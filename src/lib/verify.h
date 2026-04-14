@@ -12,8 +12,6 @@
 */
 int repman_verify_sha256(const char *filepath, const char *sha256_path);
 
-/* helper used internally, kept visible for tests if needed */
-int parse_sha256(char *sha256_str, char *sha256);
 
 /*
     Verify the signature of a file using minisign.
